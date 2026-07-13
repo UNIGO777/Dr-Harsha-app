@@ -1,0 +1,54 @@
+import { Router } from 'express';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
+import { validate } from '../../middleware/validate';
+import * as authController from './auth.controller';
+import {
+  requestOtpSchema,
+  verifyOtpSchema,
+  refreshSchema,
+  logoutSchema,
+} from './auth.validation';
+
+/**
+ * Auth routes. These are PUBLIC — they must NOT sit behind authenticate /
+ * requireActiveAccess.
+ */
+const router = Router();
+
+/**
+ * Per-phone OTP request limiter: max 5 requests/hour. Keyed by phone (falls
+ * back to a normalised IP key when phone is absent, e.g. malformed request).
+ */
+const otpRequestLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 5,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const phone = (req.body as { phone?: unknown } | undefined)?.phone;
+    return typeof phone === 'string' && phone.length > 0
+      ? `otp:${phone}`
+      : ipKeyGenerator(req.ip ?? '');
+  },
+  handler: (_req, res) => {
+    res.status(429).json({
+      success: false,
+      message: 'Too many OTP requests. Please try again later.',
+    });
+  },
+});
+
+router.post(
+  '/request-otp',
+  otpRequestLimiter,
+  validate({ body: requestOtpSchema }),
+  authController.requestOtp
+);
+
+router.post('/verify-otp', validate({ body: verifyOtpSchema }), authController.verifyOtp);
+
+router.post('/refresh', validate({ body: refreshSchema }), authController.refresh);
+
+router.post('/logout', validate({ body: logoutSchema }), authController.logout);
+
+export default router;

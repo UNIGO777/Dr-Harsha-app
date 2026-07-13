@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Secrets
+firebase-admin.json
+
+# Build output
+dist/
+build/
+
+# Uploads (keep the folder, ignore its contents)
+uploads/*
+!uploads/.gitkeep
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+
+# Coverage / cache
+coverage/
+.cache/
