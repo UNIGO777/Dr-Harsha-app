@@ -22,10 +22,13 @@ const containerByVariant: Record<Variant, string> = {
   ghost: 'bg-transparent',
 };
 
-const labelByVariant: Record<Variant, string> = {
-  primary: 'text-accent-text',
-  secondary: 'text-primary',
-  ghost: 'text-accent',
+// Label colors are applied via inline style (not className): NativeWind doesn't
+// reliably resolve an interpolated color class here, which silently falls back
+// to black (only invisible on primary since accentText is already near-black).
+const labelColorByVariant: Record<Variant, string> = {
+  primary: colors.accentText,
+  secondary: colors.textPrimary,
+  ghost: colors.accent,
 };
 
 export function Button({
@@ -55,7 +58,9 @@ export function Button({
       {loading ? (
         <ActivityIndicator color={variant === 'primary' ? colors.accentText : colors.accent} />
       ) : (
-        <Text className={`font-sans-semibold text-base ${labelByVariant[variant]}`}>{label}</Text>
+        <Text style={{ color: labelColorByVariant[variant] }} className="font-sans-semibold text-base">
+          {label}
+        </Text>
       )}
     </Pressable>
   );

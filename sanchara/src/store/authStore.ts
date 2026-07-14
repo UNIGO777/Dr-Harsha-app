@@ -10,6 +10,7 @@ import { create } from 'zustand';
 import {
   clearTokens,
   getAccessToken,
+  getOnboardingToken,
   setAccessToken,
   setOnboardingToken,
   setRefreshToken,
@@ -34,8 +35,15 @@ export const useAuthStore = create<AuthState>((set) => ({
   status: 'idle',
   phone: null,
   hydrate: async () => {
-    const token = await getAccessToken();
-    set({ status: token ? 'authenticated' : 'unauthenticated' });
+    // Onboarded users have an access token; new users mid-onboarding only have
+    // the onboarding token; everyone else is unauthenticated.
+    const accessToken = await getAccessToken();
+    if (accessToken) {
+      set({ status: 'authenticated' });
+      return;
+    }
+    const onboardingToken = await getOnboardingToken();
+    set({ status: onboardingToken ? 'onboarding' : 'unauthenticated' });
   },
   signIn: async ({ accessToken, refreshToken }, phone) => {
     await setAccessToken(accessToken);

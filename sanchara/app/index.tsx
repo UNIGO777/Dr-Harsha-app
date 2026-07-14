@@ -1,16 +1,23 @@
-// Landing / get-started screen. Content flows from the top; the primary CTA is
-// pinned to the bottom. Icon + accent kept as-is per design direction.
+// Landing / get-started screen. Also the launch gate: onboarded users skip to
+// the app, mid-onboarding users resume onboarding, everyone else sees this.
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { Activity } from 'lucide-react-native';
 import { View, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui';
+import { useAuthStore } from '@/store/authStore';
 import { colors } from '@/theme/tokens';
 
 export default function Index() {
   const router = useRouter();
+  const status = useAuthStore((s) => s.status);
+
+  // Gate on the hydrated session (see authStore.hydrate in the root layout).
+  if (status === 'idle') return null; // splash still showing
+  if (status === 'authenticated') return <Redirect href="/(app)/(tabs)/home" />;
+  if (status === 'onboarding') return <Redirect href="/(onboarding)/welcome" />;
 
   return (
     <View className="flex-1 bg-base">

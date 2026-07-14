@@ -8,8 +8,10 @@
  *   / forced logout). For now it just rethrows.
  */
 import axios, { type InternalAxiosRequestConfig } from 'axios';
+import { router } from 'expo-router';
 
 import { getAccessToken } from '@/lib/secureStore';
+import { useAuthStore } from '@/store/authStore';
 
 const baseURL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -35,10 +37,25 @@ api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
   return config;
 });
 
+// Global 401 handler: an invalid/expired token (access OR onboarding) means the
+// session is dead. Clear it and bounce to the auth/landing screen immediately —
+// this is the real-time logout (no socket needed; expiry is time-based and shows
+// up as a 401 on the next request). Guarded so concurrent 401s redirect once.
+let sessionExpiring = false;
+
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    // TODO: on 401, attempt refresh-token flow, else clear session + route to auth.
+  async (error) => {
+    const status = error?.response?.status;
+    if (status === 401 && !sessionExpiring) {
+      sessionExpiring = true;
+      try {
+        await useAuthStore.getState().signOut();
+        router.replace('/');
+      } finally {
+        sessionExpiring = false;
+      }
+    }
     return Promise.reject(error);
   },
 );
