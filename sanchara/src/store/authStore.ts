@@ -1,24 +1,32 @@
 /**
  * Auth session — CLIENT state (zustand).
  *
- * Holds the in-memory session status the UI reacts to. The token *value* itself
- * lives in expo-secure-store (see src/lib/secureStore.ts); this store only tracks
- * whether we're authenticated and hydrates that flag on launch.
+ * Holds the in-memory session status the UI reacts to. Token *values* live in
+ * expo-secure-store (see src/lib/secureStore.ts); this store tracks whether we're
+ * authenticated / mid-onboarding and hydrates that on launch.
  */
 import { create } from 'zustand';
 
-import { clearTokens, getAccessToken, setAccessToken } from '@/lib/secureStore';
+import {
+  clearTokens,
+  getAccessToken,
+  setAccessToken,
+  setOnboardingToken,
+  setRefreshToken,
+} from '@/lib/secureStore';
 
-type AuthStatus = 'idle' | 'authenticated' | 'unauthenticated';
+type AuthStatus = 'idle' | 'authenticated' | 'onboarding' | 'unauthenticated';
 
 interface AuthState {
   status: AuthStatus;
   phone: string | null;
   /** Read the persisted token on app launch and set status accordingly. */
   hydrate: () => Promise<void>;
-  /** Persist a fresh access token and mark the session authenticated. */
-  signIn: (accessToken: string, phone?: string) => Promise<void>;
-  /** Clear tokens + reset to unauthenticated. */
+  /** Fully authenticated (existing, onboarded user): persist both tokens. */
+  signIn: (tokens: { accessToken: string; refreshToken: string }, phone: string) => Promise<void>;
+  /** New user after OTP verify: hold the onboarding token, enter onboarding. */
+  startOnboarding: (onboardingToken: string, phone: string) => Promise<void>;
+  /** Clear everything + reset to unauthenticated. */
   signOut: () => Promise<void>;
 }
 
@@ -29,9 +37,14 @@ export const useAuthStore = create<AuthState>((set) => ({
     const token = await getAccessToken();
     set({ status: token ? 'authenticated' : 'unauthenticated' });
   },
-  signIn: async (accessToken, phone) => {
+  signIn: async ({ accessToken, refreshToken }, phone) => {
     await setAccessToken(accessToken);
-    set({ status: 'authenticated', phone: phone ?? null });
+    await setRefreshToken(refreshToken);
+    set({ status: 'authenticated', phone });
+  },
+  startOnboarding: async (onboardingToken, phone) => {
+    await setOnboardingToken(onboardingToken);
+    set({ status: 'onboarding', phone });
   },
   signOut: async () => {
     await clearTokens();

@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(lsof -nP -iTCP:5055 -sTCP:LISTEN)"
+      "Bash(lsof -nP -iTCP:5055 -sTCP:LISTEN)",
+      "Bash(sed -n '/export async function verifyOtp/,/^}/p' src/modules/auth/auth.service.ts)",
+      "Bash(sed -n '/export async function requestOtp/,/^}/p' src/modules/auth/auth.service.ts)"
     ]
   }
 }

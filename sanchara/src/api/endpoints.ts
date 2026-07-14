@@ -7,10 +7,10 @@
  */
 export const endpoints = {
   auth: {
-    requestOtp: '/auth/otp/request',
-    verifyOtp: '/auth/otp/verify',
+    requestOtp: '/auth/request-otp',
+    verifyOtp: '/auth/verify-otp',
     refresh: '/auth/refresh',
-    me: '/auth/me',
+    logout: '/auth/logout',
   },
   onboarding: {
     submit: '/onboarding',
