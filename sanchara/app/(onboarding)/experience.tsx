@@ -10,10 +10,18 @@ import type { ExerciseHistoryLevel } from '@/lib/enums';
 import { useOnboardingStore } from '@/store/onboardingStore';
 
 const OPTIONS: { value: ExerciseHistoryLevel; title: string; description: string }[] = [
-  { value: 'none', title: 'None', description: 'Starting my journey from zero.' },
-  { value: 'beginner', title: 'Beginner', description: 'Occasional walks and gentle movement.' },
-  { value: 'intermediate', title: 'Intermediate', description: 'Regular activity 2–3 times per week.' },
-  { value: 'advanced', title: 'Advanced', description: 'High-intensity training 5+ days a week.' },
+  { value: 'none', title: 'None', description: 'I do not exercise regularly' },
+  { value: 'beginner', title: 'Beginner', description: 'Walking, yoga, or light exercise' },
+  {
+    value: 'intermediate',
+    title: 'Intermediate',
+    description: 'Gym, sports, or structured exercise 2–4 times per week',
+  },
+  {
+    value: 'advanced',
+    title: 'Advanced',
+    description: 'Intense training, gym, sports, or workouts 5 or more times per week',
+  },
 ];
 
 export default function ExperienceScreen() {
@@ -32,7 +40,7 @@ export default function ExperienceScreen() {
   return (
     <OnboardingScaffold
       step={STEP.experience}
-      title="How active are you currently?"
+      title="What is your current exercise level?"
       subtitle="This sets a safe starting intensity that matches your movement level."
       ctaDisabled={!level}
       onContinue={onContinue}

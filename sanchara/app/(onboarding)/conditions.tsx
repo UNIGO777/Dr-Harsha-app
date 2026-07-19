@@ -1,24 +1,26 @@
 // Onboarding step 7 — health background: existing conditions + past surgeries.
 import { useRouter } from 'expo-router';
+import { ChevronRight } from 'lucide-react-native';
 import { useState } from 'react';
-import { Text, TextInput, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
-import { Chip } from '@/components/ui';
+import { Chip, TextComposer } from '@/components/ui';
 import { STEP } from '@/features/onboarding/steps';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { colors } from '@/theme/tokens';
 
 const COMMON_CONDITIONS = [
   'Diabetes',
-  'Hypertension',
+  'High blood pressure / Hypertension',
+  'Brain or neurological condition',
   'Heart condition',
-  'Arthritis',
-  'Back problems',
-  'Asthma',
-  'Thyroid',
-  'Osteoporosis',
-  'Knee / joint issues',
+  'High cholesterol',
+  'Asthma or other breathing condition',
+  'Thyroid condition',
+  'Bone-related condition',
+  'Joint-related condition',
+  'Previous injury',
 ];
 
 export default function ConditionsScreen() {
@@ -28,6 +30,7 @@ export default function ConditionsScreen() {
 
   const [conditions, setConditions] = useState<string[]>(draft.conditions);
   const [surgery, setSurgery] = useState(draft.surgeryHistory ?? '');
+  const [composerOpen, setComposerOpen] = useState(false);
 
   function toggle(c: string) {
     setConditions((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
@@ -41,8 +44,8 @@ export default function ConditionsScreen() {
   return (
     <OnboardingScaffold
       step={STEP.conditions}
-      title="Your health background"
-      subtitle="This keeps your programme safe. Select anything that applies — or skip if none."
+      title="Do you have any of the following health conditions?"
+      subtitle="Select all that apply. Skip if none apply to you."
       onContinue={onContinue}
     >
       <View className="flex-row flex-wrap gap-2.5">
@@ -53,20 +56,33 @@ export default function ConditionsScreen() {
 
       <View className="mt-8">
         <Text className="mb-2 font-sans text-xs uppercase tracking-[2px] text-micro">
-          Past surgeries or injuries (optional)
+          Past operations or injuries (optional)
         </Text>
-        <TextInput
-          className="min-h-[96px] rounded-input border border-border bg-input-fill px-4 py-3 font-sans text-base text-primary"
-          placeholder="e.g. knee replacement in 2021, lower-back injury…"
-          placeholderTextColor={colors.microLabel}
-          selectionColor={colors.accent}
-          value={surgery}
-          onChangeText={setSurgery}
-          multiline
-          textAlignVertical="top"
-          maxLength={2000}
-        />
+        <Pressable
+          onPress={() => setComposerOpen(true)}
+          className="min-h-[64px] flex-row items-center justify-between rounded-input border border-border bg-input-fill px-4 py-3"
+        >
+          <Text
+            numberOfLines={2}
+            className={`mr-3 flex-1 font-sans text-base ${surgery ? 'text-primary' : 'text-micro'}`}
+          >
+            {surgery || 'Tap to add details…'}
+          </Text>
+          <ChevronRight color={colors.microLabel} size={20} />
+        </Pressable>
       </View>
+
+      <TextComposer
+        visible={composerOpen}
+        title="Operations or injuries"
+        initialValue={surgery}
+        placeholder="e.g. knee replacement in 2021, lower-back injury…"
+        maxLength={2000}
+        onDone={(t) => {
+          setSurgery(t.trim());
+          setComposerOpen(false);
+        }}
+      />
     </OnboardingScaffold>
   );
 }

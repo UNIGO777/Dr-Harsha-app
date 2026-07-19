@@ -1,8 +1,11 @@
 /**
- * Tappable body map for the pain-areas step. A stylised silhouette (SVG shapes)
- * with front/back hotspots the user taps to toggle. Selected region ids are the
- * source of truth (stored as painAreas[] on the backend). Coordinates are in a
- * 200×360 viewBox scaled to the container width.
+ * Tappable body map for the pain-areas step. A stylised silhouette with front
+ * and back hotspots covering the full pain-region list. Each hotspot toggles a
+ * region id; the screen maps ids -> labels (see REGION_LABELS) for display and
+ * for the backend painAreas[]. Coordinates are in a 200×380 viewBox.
+ *
+ * Note: "Right/Left" are the person's own sides (anatomical) — the person's
+ * right is on the viewer's left in the front view.
  */
 import { useState } from 'react';
 import { Text, View } from 'react-native';
@@ -10,64 +13,62 @@ import Svg, { Circle, Ellipse, Rect } from 'react-native-svg';
 
 import { colors } from '@/theme/tokens';
 
-export interface BodyRegion {
+interface Hotspot {
   id: string;
   label: string;
   cx: number;
   cy: number;
 }
 
-const FRONT: BodyRegion[] = [
-  { id: 'neck', label: 'Neck', cx: 100, cy: 62 },
-  { id: 'left_shoulder', label: 'Left shoulder', cx: 72, cy: 78 },
-  { id: 'right_shoulder', label: 'Right shoulder', cx: 128, cy: 78 },
-  { id: 'chest', label: 'Chest', cx: 100, cy: 96 },
-  { id: 'left_elbow', label: 'Left elbow', cx: 52, cy: 128 },
-  { id: 'right_elbow', label: 'Right elbow', cx: 148, cy: 128 },
-  { id: 'abdomen', label: 'Abdomen', cx: 100, cy: 138 },
-  { id: 'left_wrist', label: 'Left wrist', cx: 48, cy: 168 },
-  { id: 'right_wrist', label: 'Right wrist', cx: 152, cy: 168 },
-  { id: 'left_hip', label: 'Left hip', cx: 84, cy: 176 },
-  { id: 'right_hip', label: 'Right hip', cx: 116, cy: 176 },
-  { id: 'left_knee', label: 'Left knee', cx: 86, cy: 250 },
-  { id: 'right_knee', label: 'Right knee', cx: 114, cy: 250 },
-  { id: 'left_ankle', label: 'Left ankle', cx: 86, cy: 320 },
-  { id: 'right_ankle', label: 'Right ankle', cx: 114, cy: 320 },
+const FRONT: Hotspot[] = [
+  { id: 'head', label: 'Head', cx: 100, cy: 30 },
+  { id: 'neck', label: 'Neck', cx: 100, cy: 52 },
+  { id: 'right_shoulder', label: 'Right shoulder', cx: 72, cy: 72 },
+  { id: 'left_shoulder', label: 'Left shoulder', cx: 128, cy: 72 },
+  { id: 'right_elbow', label: 'Right elbow', cx: 52, cy: 116 },
+  { id: 'left_elbow', label: 'Left elbow', cx: 148, cy: 116 },
+  { id: 'right_wrist', label: 'Right wrist', cx: 47, cy: 150 },
+  { id: 'left_wrist', label: 'Left wrist', cx: 153, cy: 150 },
+  { id: 'right_hand', label: 'Right hand', cx: 45, cy: 170 },
+  { id: 'left_hand', label: 'Left hand', cx: 155, cy: 170 },
+  { id: 'pelvis', label: 'Pelvis', cx: 100, cy: 160 },
+  { id: 'right_hip', label: 'Right hip', cx: 84, cy: 150 },
+  { id: 'left_hip', label: 'Left hip', cx: 116, cy: 150 },
+  { id: 'right_knee', label: 'Right knee', cx: 86, cy: 242 },
+  { id: 'left_knee', label: 'Left knee', cx: 114, cy: 242 },
+  { id: 'right_ankle', label: 'Right ankle', cx: 86, cy: 322 },
+  { id: 'left_ankle', label: 'Left ankle', cx: 114, cy: 322 },
+  { id: 'right_foot', label: 'Right sole / Foot', cx: 86, cy: 348 },
+  { id: 'left_foot', label: 'Left sole / Foot', cx: 114, cy: 348 },
 ];
 
-const BACK: BodyRegion[] = [
-  { id: 'neck', label: 'Neck', cx: 100, cy: 62 },
-  { id: 'upper_back', label: 'Upper back', cx: 100, cy: 96 },
-  { id: 'left_shoulder_blade', label: 'Left shoulder blade', cx: 80, cy: 92 },
-  { id: 'right_shoulder_blade', label: 'Right shoulder blade', cx: 120, cy: 92 },
-  { id: 'lower_back', label: 'Lower back', cx: 100, cy: 145 },
-  { id: 'glutes', label: 'Glutes', cx: 100, cy: 182 },
-  { id: 'left_hamstring', label: 'Left hamstring', cx: 86, cy: 225 },
-  { id: 'right_hamstring', label: 'Right hamstring', cx: 114, cy: 225 },
-  { id: 'left_calf', label: 'Left calf', cx: 86, cy: 290 },
-  { id: 'right_calf', label: 'Right calf', cx: 114, cy: 290 },
+const BACK: Hotspot[] = [
+  { id: 'upper_back', label: 'Upper back / Thoracic', cx: 100, cy: 92 },
+  { id: 'lower_back', label: 'Lower back', cx: 100, cy: 140 },
+  { id: 'right_calf', label: 'Right calf', cx: 86, cy: 292 },
+  { id: 'left_calf', label: 'Left calf', cx: 114, cy: 292 },
 ];
+
+/** id -> label for every anatomical region (front + back). */
+export const REGION_LABELS: Record<string, string> = Object.fromEntries(
+  [...FRONT, ...BACK].map((h) => [h.id, h.label]),
+);
 
 const VIEW_W = 200;
-const VIEW_H = 360;
-const HOTSPOT_R = 12;
+const VIEW_H = 380;
+const DOT_R = 9;
 
 function Silhouette() {
   const fill = colors.surface;
   return (
     <>
-      {/* head */}
-      <Circle cx={100} cy={34} r={20} fill={fill} />
-      {/* torso */}
-      <Rect x={70} y={58} width={60} height={110} rx={26} fill={fill} />
-      {/* arms */}
-      <Rect x={44} y={68} width={18} height={108} rx={9} fill={fill} />
-      <Rect x={138} y={68} width={18} height={108} rx={9} fill={fill} />
-      {/* hips */}
-      <Ellipse cx={100} cy={178} rx={34} ry={20} fill={fill} />
-      {/* legs */}
-      <Rect x={76} y={186} width={20} height={158} rx={10} fill={fill} />
-      <Rect x={104} y={186} width={20} height={158} rx={10} fill={fill} />
+      <Circle cx={100} cy={30} r={18} fill={fill} />
+      <Rect x={72} y={50} width={56} height={100} rx={22} fill={fill} />
+      <Rect x={48} y={60} width={15} height={100} rx={7} fill={fill} />
+      <Rect x={137} y={60} width={15} height={100} rx={7} fill={fill} />
+      <Ellipse cx={100} cy={158} rx={30} ry={17} fill={fill} />
+      <Rect x={78} y={172} width={18} height={182} rx={9} fill={fill} />
+      <Rect x={104} y={172} width={18} height={182} rx={9} fill={fill} />
     </>
   );
 }
@@ -79,12 +80,12 @@ interface BodyMapProps {
 
 export function BodyMap({ selected, onToggle }: BodyMapProps) {
   const [side, setSide] = useState<'front' | 'back'>('front');
-  const regions = side === 'front' ? FRONT : BACK;
+  const hotspots = side === 'front' ? FRONT : BACK;
 
   return (
     <View className="items-center">
       {/* Front / Back toggle */}
-      <View className="mb-5 flex-row rounded-pill border border-border bg-input-fill p-1">
+      <View className="mb-4 flex-row rounded-pill border border-border bg-input-fill p-1">
         {(['front', 'back'] as const).map((s) => {
           const active = side === s;
           return (
@@ -100,29 +101,27 @@ export function BodyMap({ selected, onToggle }: BodyMapProps) {
         })}
       </View>
 
-      <Svg width="100%" height={380} viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}>
+      <Svg width="100%" height={360} viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}>
         <Silhouette />
-        {regions.map((r) => {
-          const isSel = selected.includes(r.id);
+        {hotspots.map((h) => {
+          const isSel = selected.includes(h.id);
           return (
             <Circle
-              key={`${side}-${r.id}`}
-              cx={r.cx}
-              cy={r.cy}
-              r={HOTSPOT_R}
-              fill={isSel ? colors.accent : 'rgba(184,184,190,0.18)'}
+              key={`${side}-${h.id}`}
+              cx={h.cx}
+              cy={h.cy}
+              r={DOT_R}
+              fill={isSel ? colors.accent : 'rgba(184,184,190,0.22)'}
               stroke={isSel ? colors.accent : colors.border}
               strokeWidth={1.5}
-              onPress={() => onToggle(r.id)}
+              onPress={() => onToggle(h.id)}
             />
           );
         })}
       </Svg>
 
-      <Text className="mt-2 font-sans text-xs text-micro">
-        {selected.length > 0
-          ? `${selected.length} area${selected.length > 1 ? 's' : ''} selected`
-          : 'Tap the areas that need attention'}
+      <Text className="mt-1 font-sans text-xs text-micro">
+        Tap the areas that need attention · {side === 'front' ? 'Front view' : 'Back view'}
       </Text>
     </View>
   );

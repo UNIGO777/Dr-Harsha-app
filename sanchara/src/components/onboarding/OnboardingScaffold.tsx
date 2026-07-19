@@ -1,25 +1,18 @@
 /**
- * Cinematic onboarding wrapper used by every step. Renders:
+ * Cinematic onboarding wrapper used by every step. Layout (top → bottom):
  *   - top bar: back chevron · "STEP n OF 10" · close (X)
- *   - segmented progress (n of total)
- *   - a full-bleed background (optional image + scrim, else an accent-tinted
- *     gradient) — pass `image` later when the photo assets land
- *   - scrollable title/subtitle/content
- *   - a pinned Continue button + optional footer note
+ *   - segmented progress
+ *   - FIXED title + subtitle (kept out of the scroll area so a long title can
+ *     never scroll under the progress bar)
+ *   - scrollable content (children)
+ *   - optional `aboveCta` slot, then the pinned Continue button + footer note
  */
 import { Image, type ImageSource } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { ChevronLeft, X } from 'lucide-react-native';
 import type { ReactNode } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-} from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui';
@@ -37,6 +30,8 @@ interface OnboardingScaffoldProps {
   ctaLoading?: boolean;
   ctaDisabled?: boolean;
   onContinue: () => void;
+  /** Rendered fixed, directly above the Continue button (e.g. selected chips). */
+  aboveCta?: ReactNode;
   footerNote?: string;
   onBack?: () => void;
   onClose?: () => void;
@@ -65,6 +60,7 @@ export function OnboardingScaffold({
   ctaLoading = false,
   ctaDisabled = false,
   onContinue,
+  aboveCta,
   footerNote,
   onBack,
   onClose,
@@ -73,7 +69,6 @@ export function OnboardingScaffold({
 
   return (
     <View className="flex-1 bg-base">
-      {/* Background */}
       {image ? (
         <Image source={image} style={{ position: 'absolute', inset: 0 }} contentFit="cover" />
       ) : null}
@@ -111,22 +106,27 @@ export function OnboardingScaffold({
 
           <SegmentedProgress step={step} total={ONBOARDING_TOTAL_STEPS} />
 
-          {/* Content */}
-          <ScrollView
-            className="flex-1"
-            contentContainerStyle={{ paddingTop: 32, paddingBottom: 16 }}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
+          {/* Fixed title */}
+          <View className="mt-8">
             <Text className="font-display-bold text-4xl leading-[42px] text-primary">{title}</Text>
             {subtitle ? (
               <Text className="mt-3 font-sans text-base leading-6 text-secondary">{subtitle}</Text>
             ) : null}
-            {children ? <View className="mt-8">{children}</View> : null}
+          </View>
+
+          {/* Scrollable content */}
+          <ScrollView
+            className="mt-6 flex-1"
+            contentContainerStyle={{ paddingBottom: 16 }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {children}
           </ScrollView>
 
-          {/* CTA */}
+          {/* Fixed footer */}
           <View className="pb-2 pt-2">
+            {aboveCta}
             <Button
               label={ctaLabel}
               loading={ctaLoading}
