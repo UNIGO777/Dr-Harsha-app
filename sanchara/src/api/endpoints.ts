@@ -19,6 +19,16 @@ export const endpoints = {
     library: '/exercises',
     byId: (id: string) => `/exercises/${id}`,
   },
+  programs: {
+    list: '/programs',
+    recommended: '/programs/recommended',
+    byId: (id: string) => `/programs/${id}`,
+  },
+  enrollments: {
+    root: '/enrollments',
+    me: '/enrollments/me',
+    today: '/enrollments/me/today',
+  },
   sessions: {
     list: '/sessions',
     start: '/sessions/start',

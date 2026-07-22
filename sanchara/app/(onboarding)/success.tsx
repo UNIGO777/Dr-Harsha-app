@@ -98,7 +98,7 @@ export default function SuccessScreen() {
           {isWaitlisted ? (
             <Button label="Done" onPress={onWaitlistDone} />
           ) : (
-            <Button label="Start exploring" onPress={() => router.replace('/(app)/(tabs)/home')} />
+            <Button label="Start exploring" onPress={() => router.replace('/(programs)')} />
           )}
         </View>
       </SafeAreaView>

@@ -63,12 +63,22 @@ export async function completeExercise(req: Request, res: Response, next: NextFu
 
 export async function complete(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const summary = await sessionService.completeSession(
+    const result = await sessionService.completeSession(
       userId(req),
       req.params.id as string,
       req.body as CompleteSessionInput
     );
-    res.json({ success: true, session: summary });
+    // result = { session, enrollment } — enrollment advance is null for SHORT/standalone.
+    res.json({ success: true, ...result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function active(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const result = await sessionService.getActiveSession(userId(req));
+    res.json({ success: true, ...result });
   } catch (err) {
     next(err);
   }

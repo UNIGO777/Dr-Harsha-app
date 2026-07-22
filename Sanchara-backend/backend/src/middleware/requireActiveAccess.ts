@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
+import { isProd } from '../config/env';
 import { ApiError } from '../utils/ApiError';
 import { getAccessContext } from '../modules/auth/auth.service';
 
@@ -48,7 +49,9 @@ export async function requireActiveAccess(
     // trial window is evaluated, so trial-only lockout works today.
     const hasActiveSubscription = false;
 
-    if (trialEnded && !hasActiveSubscription) {
+    // Day-3 lockout is enforced in PRODUCTION only; in dev/test the 2-day trial
+    // is not enforced so local testing isn't blocked once the trial elapses.
+    if (isProd && trialEnded && !hasActiveSubscription) {
       throw new ApiError(403, 'Your free trial has ended', {
         details: { reason: 'trial_expired', requires: 'subscription_required' },
       });

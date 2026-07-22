@@ -39,10 +39,13 @@ export interface ISessionExercise {
 export interface ISession {
   user: Types.ObjectId;
   program?: Types.ObjectId;
+  programDay?: Types.ObjectId; // ref 'ProgramDay' (M2.5)
+  dayNumber?: number; // snapshot of the program day at session time
   programType?: ProgramType;
   shortProgramTag?: string;
 
   state: SessionState;
+  currentExerciseIndex: number; // resume pointer — survives app restarts
   painCheckin: IPainCheckinEntry[];
   safetyOverride: ISafetyOverride;
   exercises: ISessionExercise[];
@@ -110,10 +113,15 @@ const sessionSchema = new Schema<ISession>(
       index: true,
     },
     program: { type: Schema.Types.ObjectId, ref: 'Program' },
+    programDay: { type: Schema.Types.ObjectId, ref: 'ProgramDay' },
+    dayNumber: { type: Number, min: 1 },
     programType: { type: String, enum: PROGRAM_TYPES },
     shortProgramTag: { type: String },
 
+    // An in-progress session (state not COMPLETED/ABANDONED) persists across app
+    // restarts and is NEVER auto-abandoned — the client resumes via /sessions/active.
     state: { type: String, enum: SESSION_STATES, required: true },
+    currentExerciseIndex: { type: Number, default: 0, min: 0 },
     painCheckin: { type: [painCheckinEntrySchema], default: [] },
     safetyOverride: {
       type: safetyOverrideSchema,

@@ -15,7 +15,8 @@
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
     "seed:exercises": "tsx src/scripts/seedExercises.ts",
-    "seed:demo-program": "tsx src/scripts/seedDemoProgram.ts"
+    "seed:programs": "tsx src/scripts/seedPrograms.ts",
+    "seed:demo": "tsx src/scripts/seedDemoPrograms.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",

@@ -2,28 +2,39 @@ import { Schema, model, type Types } from 'mongoose';
 import {
   PROGRAM_TYPES,
   GENDER_FILTERS,
+  DIFFICULTIES,
   type ProgramType,
   type GenderFilter,
+  type Difficulty,
 } from '../constants/enums';
 
 /**
- * Program covers three kinds of playlists distinguished by `type`:
- *  - ASSIGNED ("Doctor's Program"): built by staff for a specific user.
- *  - CUSTOM: built by a user; can be locked by staff.
- *  - SHORT: canned short programs (e.g. SP-001), filtered by gender.
- * Type-specific fields are optional at the schema level; which ones apply is
- * governed by `type` (enforced in the service layer later).
+ * Program (M2.5) = the overall plan. Content is now 3-level:
+ *   Program → ProgramDay → Exercises. The flat `exercises[]` was removed;
+ *   exercises live on ProgramDay so a day is one workout.
+ *
+ * `type` still distinguishes the original playlist kinds plus STANDARD:
+ *  - STANDARD : published catalog plan users enroll in (30/90 days)
+ *  - ASSIGNED : doctor-built for a specific patient
+ *  - CUSTOM   : user-built; can be locked by staff
+ *  - SHORT    : canned standalone program (e.g. SP-001) — no enrollment
  */
-export interface IProgramExercise {
-  exercise: Types.ObjectId;
-  order: number;
-}
-
 export interface IProgram {
   type: ProgramType;
   name?: string;
   description?: string;
-  exercises: IProgramExercise[];
+
+  // Catalog / plan metadata (M2.5)
+  durationDays?: number;
+  isPublished: boolean;
+  thumbnailUrl?: string;
+
+  // Recommendation tags (M2.5)
+  goalTag: string[];
+  suitableConditions: string[];
+  targetAreas: string[];
+  difficultyLevel?: Difficulty;
+  ageGroups: string[]; // USER_GROUPS values
 
   // ASSIGNED
   createdByStaff?: Types.ObjectId;
@@ -47,20 +58,23 @@ export interface IProgram {
   updatedAt: Date;
 }
 
-const programExerciseSchema = new Schema<IProgramExercise>(
-  {
-    exercise: { type: Schema.Types.ObjectId, ref: 'Exercise', required: true },
-    order: { type: Number, required: true, min: 0 },
-  },
-  { _id: false }
-);
-
 const programSchema = new Schema<IProgram>(
   {
     type: { type: String, enum: PROGRAM_TYPES, required: true, index: true },
     name: { type: String, trim: true },
     description: { type: String },
-    exercises: { type: [programExerciseSchema], default: [] },
+
+    // Catalog / plan metadata
+    durationDays: { type: Number, min: 1 },
+    isPublished: { type: Boolean, default: false, index: true },
+    thumbnailUrl: { type: String },
+
+    // Recommendation tags
+    goalTag: { type: [String], default: [] },
+    suitableConditions: { type: [String], default: [] },
+    targetAreas: { type: [String], default: [] },
+    difficultyLevel: { type: String, enum: DIFFICULTIES },
+    ageGroups: { type: [String], default: [] },
 
     // ASSIGNED ("Doctor's Program")
     createdByStaff: { type: Schema.Types.ObjectId, ref: 'Staff' },

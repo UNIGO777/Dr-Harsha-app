@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { ApiError } from '../../utils/ApiError';
 import { getUserContext } from '../auth/auth.service';
+import { toStorageKey } from '../../services/upload.service';
 import * as exerciseService from './exercise.service';
 import type { Viewer } from './exercise.service';
 import type {
@@ -160,6 +161,30 @@ export async function listPending(
   try {
     const exercises = await exerciseService.listPendingExercises();
     res.json({ success: true, exercises });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/exercises/upload-video — stores an MP4 (+ optional thumbnail) locally
+ * and returns STORAGE KEYS. The staff then saves videoStorageKey to an
+ * Exercise.videoUrl via POST/PATCH /exercises. No public/playable URL is returned.
+ */
+export async function uploadVideo(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const files = req.files as
+      | { video?: Express.Multer.File[]; thumbnail?: Express.Multer.File[] }
+      | undefined;
+    const video = files?.video?.[0];
+    if (!video) throw ApiError.badRequest('A video file is required (multipart field "video")');
+    const thumbnail = files?.thumbnail?.[0];
+    res.status(201).json({
+      success: true,
+      videoStorageKey: toStorageKey(video),
+      thumbnailStorageKey: thumbnail ? toStorageKey(thumbnail) : undefined,
+      note: 'Save videoStorageKey to Exercise.videoUrl via POST/PATCH /api/exercises.',
+    });
   } catch (err) {
     next(err);
   }

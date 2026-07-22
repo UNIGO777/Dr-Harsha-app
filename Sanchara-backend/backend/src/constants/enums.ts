@@ -57,8 +57,15 @@ export const EXERCISE_STATUSES = [
 export type ExerciseStatus = (typeof EXERCISE_STATUSES)[number];
 
 // ── Program ─────────────────────────────────────────────────────────────────
-export const PROGRAM_TYPES = ['ASSIGNED', 'CUSTOM', 'SHORT'] as const;
+// STANDARD (M2.5) = a published, day-based catalog program users enroll in
+// (30/90-day plans). It is none of the three original playlist kinds, so it
+// gets its own type rather than being force-fit into ASSIGNED/CUSTOM/SHORT.
+export const PROGRAM_TYPES = ['STANDARD', 'ASSIGNED', 'CUSTOM', 'SHORT'] as const;
 export type ProgramType = (typeof PROGRAM_TYPES)[number];
+
+// ── Enrollment (M2.5) ─────────────────────────────────────────────────────────
+export const ENROLLMENT_STATUSES = ['ACTIVE', 'COMPLETED', 'PAUSED', 'ABANDONED'] as const;
+export type EnrollmentStatus = (typeof ENROLLMENT_STATUSES)[number];
 
 // ── Session ─────────────────────────────────────────────────────────────────
 export const SESSION_STATES = [

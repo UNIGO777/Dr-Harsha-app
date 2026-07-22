@@ -1,30 +1,24 @@
 import { z } from 'zod';
-import { PROGRAM_TYPES, SESSION_STATES } from '../../constants/enums';
+import { SESSION_STATES } from '../../constants/enums';
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid id');
 
 // ── Start ─────────────────────────────────────────────────────────────────────
-export const startSessionSchema = z
-  .object({
-    programId: objectId.optional(),
-    programType: z.enum(PROGRAM_TYPES),
-    shortProgramTag: z.string().trim().min(1).max(50).optional(),
-    painCheckin: z
-      .array(
-        z.object({
-          area: z.string().trim().min(1),
-          score: z.number().int().min(0).max(10),
-        })
-      )
-      .default([]),
-    // Client opts to start despite a high pain score (see safety gate).
-    safetyOverride: z.boolean().default(false),
-    safetyOverrideReason: z.string().trim().min(1).max(500).optional(),
-  })
-  .refine(
-    (d) => d.programId !== undefined || (d.programType === 'SHORT' && d.shortProgramTag !== undefined),
-    { message: 'programId is required (or shortProgramTag for SHORT programs)', path: ['programId'] }
-  );
+// M2.5: a session is started for a specific ProgramDay (not a flat program).
+export const startSessionSchema = z.object({
+  programDayId: objectId,
+  painCheckin: z
+    .array(
+      z.object({
+        area: z.string().trim().min(1),
+        score: z.number().int().min(0).max(10),
+      })
+    )
+    .default([]),
+  // Client opts to start despite a high pain score (see safety gate).
+  safetyOverride: z.boolean().default(false),
+  safetyOverrideReason: z.string().trim().min(1).max(500).optional(),
+});
 
 // ── State machine ─────────────────────────────────────────────────────────────
 export const advanceStateSchema = z.object({

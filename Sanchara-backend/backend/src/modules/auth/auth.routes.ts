@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
+import { isProd } from '../../config/env';
 import { validate } from '../../middleware/validate';
 import * as authController from './auth.controller';
 import {
@@ -24,6 +25,9 @@ const otpRequestLimiter = rateLimit({
   limit: 5,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
+  // Rate limiting is enforced in production only; skipped in dev/test so the OTP
+  // flow can be exercised freely during local testing.
+  skip: () => !isProd,
   keyGenerator: (req) => {
     const phone = (req.body as { phone?: unknown } | undefined)?.phone;
     return typeof phone === 'string' && phone.length > 0

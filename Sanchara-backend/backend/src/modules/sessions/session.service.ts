@@ -1,9 +1,5 @@
 import { Types, type HydratedDocument } from 'mongoose';
 import { Session, type ISession } from '../../models/session.model';
-// Programs have no dedicated module yet; the sessions engine reads Program docs
-// directly to resolve a program's ordered exercise list. A future Programs
-// module will own this. Exercise access still goes ONLY through M4's service.
-import { Program, type IProgram } from '../../models/program.model';
 import { ApiError } from '../../utils/ApiError';
 import { getPlayableVideoUrl } from '../../services/video.service';
 import { recordAudit } from '../../services/audit.service';
@@ -12,6 +8,8 @@ import {
   getAlternatives,
   type ExerciseSessionView,
 } from '../exercises/exercise.service';
+import { getProgramDayContentById, type ProgramDayContent } from '../programs/program.service';
+import { advanceForCompletedDay, type AdvanceResult } from '../enrollments/enrollment.service';
 import {
   getSessionStartContext,
   getUserContext,
@@ -26,8 +24,9 @@ import type {
 } from './session.validation';
 
 /**
- * Session engine. Server-authoritative: pain gating, ease capture, state
- * transitions and metrics are enforced here, never trusted from the client.
+ * Session engine (M2.5). Server-authoritative: pain gating, ease capture, state
+ * transitions, resume pointer and metrics are enforced here, never trusted from
+ * the client. A session is a USER'S RECORD of doing a ProgramDay.
  */
 
 // ── State machine ─────────────────────────────────────────────────────────────
@@ -78,22 +77,27 @@ export interface StartExerciseDTO {
   areaTag: string[];
   isWarmup: boolean;
   isCooldown: boolean;
+  sets?: number;
+  notes?: string;
   videoUrl: string | null;
+}
+
+export interface StartedSession {
+  blocked: false;
+  sessionId: string;
+  state: SessionState;
+  dayNumber?: number;
+  programType?: ProgramType;
+  currentExerciseIndex: number;
+  groupAtTime?: string;
+  levelAtTime?: number;
+  safetyOverride: ISession['safetyOverride'];
+  exercises: StartExerciseDTO[];
 }
 
 export type StartSessionResult =
   | { blocked: true; maxScore: number; message: string; actions: string[] }
-  | {
-      blocked: false;
-      sessionId: string;
-      state: SessionState;
-      programType?: ProgramType;
-      shortProgramTag?: string;
-      groupAtTime?: string;
-      levelAtTime?: number;
-      safetyOverride: ISession['safetyOverride'];
-      exercises: StartExerciseDTO[];
-    };
+  | StartedSession;
 
 export interface DetailExerciseDTO {
   exerciseId: string;
@@ -117,7 +121,9 @@ export interface SessionDetail {
   id: string;
   programType?: ProgramType;
   shortProgramTag?: string;
+  dayNumber?: number;
   state: SessionState;
+  currentExerciseIndex: number;
   completion?: SessionCompletion;
   painCheckin: { area: string; score: number }[];
   safetyOverride: ISession['safetyOverride'];
@@ -133,34 +139,35 @@ export interface SessionDetail {
   exercises: DetailExerciseDTO[];
 }
 
-// ── Program resolution ────────────────────────────────────────────────────────
-async function resolveProgram(
-  input: StartSessionInput,
-  userId: string
-): Promise<{ program: HydratedDocument<IProgram>; ordered: IProgram['exercises'] }> {
-  let program: HydratedDocument<IProgram> | null = null;
-  if (input.programId) {
-    program = await Program.findById(input.programId);
-  } else if (input.programType === 'SHORT' && input.shortProgramTag) {
-    program = await Program.findOne({ type: 'SHORT', shortCode: input.shortProgramTag });
-  }
-
-  if (!program) throw ApiError.notFound('Program not found');
-  if (!program.isActive) throw ApiError.badRequest('Program is not active');
-
-  // Ownership checks where applicable (SHORT programs are global).
-  if (program.type === 'ASSIGNED' && program.assignedTo && program.assignedTo.toString() !== userId) {
-    throw ApiError.forbidden('This program is not assigned to you');
-  }
-  if (program.type === 'CUSTOM' && program.createdByUser && program.createdByUser.toString() !== userId) {
-    throw ApiError.forbidden('This program does not belong to you');
-  }
-
-  const ordered = [...program.exercises].sort((a, b) => a.order - b.order);
-  return { program, ordered };
+// ── Build the ordered playable exercise list for a program day ─────────────────
+async function buildStartExercises(content: ProgramDayContent): Promise<StartExerciseDTO[]> {
+  const views = await getExercisesByIds(content.exercises.map((e) => e.exerciseId));
+  const byId = new Map(views.map((v) => [v.id, v]));
+  return content.exercises
+    .map((e): StartExerciseDTO | null => {
+      const v = byId.get(e.exerciseId);
+      if (!v) return null;
+      return {
+        exerciseId: v.id,
+        order: e.order,
+        title: v.title,
+        description: v.description,
+        thumbnailUrl: v.thumbnailUrl,
+        durationSeconds: v.durationSeconds,
+        difficulty: v.difficulty,
+        areaTag: v.areaTag,
+        isWarmup: v.isWarmup,
+        isCooldown: v.isCooldown,
+        sets: e.sets,
+        notes: e.notes,
+        // Entitled: requireActiveAccess passed. Never raw storageKey.
+        videoUrl: getPlayableVideoUrl(v.storageKey, true),
+      };
+    })
+    .filter((x): x is StartExerciseDTO => x !== null);
 }
 
-// ── Part 1.1 — start ──────────────────────────────────────────────────────────
+// ── Part 5.1 — start (for a ProgramDay) ────────────────────────────────────────
 export async function startSession(
   userId: string,
   input: StartSessionInput
@@ -179,7 +186,7 @@ export async function startSession(
 
   const maxScore = input.painCheckin.reduce((m, p) => Math.max(m, p.score), 0);
 
-  // SAFETY GATE — server-authoritative.
+  // SAFETY GATE — server-authoritative (unchanged from M5).
   if (maxScore >= SAFETY_THRESHOLD && !input.safetyOverride) {
     return {
       blocked: true,
@@ -191,18 +198,20 @@ export async function startSession(
   }
   const didOverride = maxScore >= SAFETY_THRESHOLD && input.safetyOverride;
 
-  const { program, ordered } = await resolveProgram(input, userId);
-  const ids = ordered.map((e) => e.exercise.toString());
-  const views = await getExercisesByIds(ids);
-  const viewById = new Map(views.map((v) => [v.id, v]));
+  const content = await getProgramDayContentById(input.programDayId);
+  if (!content) throw ApiError.notFound('Program day not found');
+  if (content.isRestDay) throw ApiError.badRequest('This is a rest day — there is no workout to start');
 
   const session = await Session.create({
     user: new Types.ObjectId(userId),
-    program: program._id,
-    programType: program.type, // server-authoritative (from the program, not the client)
-    shortProgramTag:
-      program.type === 'SHORT' ? program.shortCode ?? input.shortProgramTag : undefined,
+    program: new Types.ObjectId(content.program),
+    programDay: new Types.ObjectId(content.id),
+    dayNumber: content.dayNumber,
+    programType: content.programType, // server-authoritative (from the program)
+    // SHORT sessions carry the analytics tag but never touch enrollment progress.
+    shortProgramTag: content.programType === 'SHORT' ? 'short_program' : undefined,
     state: 'WARMUP',
+    currentExerciseIndex: 0,
     painCheckin: input.painCheckin,
     safetyOverride: didOverride
       ? { triggered: true, maxScore, overriddenAt: new Date() }
@@ -219,45 +228,70 @@ export async function startSession(
       actorRole: 'USER',
       action: 'SAFETY_OVERRIDE',
       reason: input.safetyOverrideReason ?? `User override: max pain score ${maxScore}`,
-      metadata: { sessionId: session.id, maxScore },
+      metadata: { sessionId: session.id, maxScore, dayNumber: content.dayNumber },
     });
   }
-
-  const exercises: StartExerciseDTO[] = ordered
-    .map((e): StartExerciseDTO | null => {
-      const v = viewById.get(e.exercise.toString());
-      if (!v) return null;
-      return {
-        exerciseId: v.id,
-        order: e.order,
-        title: v.title,
-        description: v.description,
-        thumbnailUrl: v.thumbnailUrl,
-        durationSeconds: v.durationSeconds,
-        difficulty: v.difficulty,
-        areaTag: v.areaTag,
-        isWarmup: v.isWarmup,
-        isCooldown: v.isCooldown,
-        // Entitled: requireActiveAccess already passed. Never raw storageKey.
-        videoUrl: getPlayableVideoUrl(v.storageKey, true),
-      };
-    })
-    .filter((x): x is StartExerciseDTO => x !== null);
 
   return {
     blocked: false,
     sessionId: session.id,
     state: session.state,
+    dayNumber: session.dayNumber,
     programType: session.programType,
-    shortProgramTag: session.shortProgramTag,
+    currentExerciseIndex: session.currentExerciseIndex,
     groupAtTime: session.groupAtTime,
     levelAtTime: session.levelAtTime,
     safetyOverride: session.safetyOverride,
+    exercises: await buildStartExercises(content),
+  };
+}
+
+// ── Part 5.2 — resume: the user's in-progress session ──────────────────────────
+export interface ActiveSessionResult {
+  active: boolean;
+  session?: {
+    sessionId: string;
+    state: SessionState;
+    dayNumber?: number;
+    programType?: ProgramType;
+    currentExerciseIndex: number;
+    painCheckin: { area: string; score: number }[];
+    safetyOverride: ISession['safetyOverride'];
+    startedAt?: Date;
+  };
+  exercises?: StartExerciseDTO[];
+}
+
+export async function getActiveSession(userId: string): Promise<ActiveSessionResult> {
+  const session = await Session.findOne({
+    user: userId,
+    state: { $nin: TERMINAL_STATES },
+  }).sort({ startedAt: -1 });
+  if (!session) return { active: false };
+
+  let exercises: StartExerciseDTO[] = [];
+  if (session.programDay) {
+    const content = await getProgramDayContentById(session.programDay.toString());
+    if (content) exercises = await buildStartExercises(content);
+  }
+
+  return {
+    active: true,
+    session: {
+      sessionId: session.id,
+      state: session.state,
+      dayNumber: session.dayNumber,
+      programType: session.programType,
+      currentExerciseIndex: session.currentExerciseIndex,
+      painCheckin: session.painCheckin.map((p) => ({ area: p.area, score: p.score })),
+      safetyOverride: session.safetyOverride,
+      startedAt: session.startedAt,
+    },
     exercises,
   };
 }
 
-// ── Part 1.2 — advance state ──────────────────────────────────────────────────
+// ── Part 5.3 — advance state ────────────────────────────────────────────────────
 export async function advanceState(
   userId: string,
   sessionId: string,
@@ -268,7 +302,6 @@ export async function advanceState(
   if (isTerminal(session.state)) {
     throw ApiError.badRequest(`Session is already ${session.state.toLowerCase()}`);
   }
-  // Terminal transitions are owned by the dedicated /complete and /abandon endpoints.
   if (isTerminal(nextState)) {
     throw ApiError.badRequest('Use POST /complete or /abandon to finalize a session');
   }
@@ -285,9 +318,10 @@ export async function advanceState(
   return { sessionId: session.id, previousState, state: session.state };
 }
 
-// ── Part 1.3 — complete an exercise ───────────────────────────────────────────
+// ── Part 5.4 — complete an exercise (advances resume pointer) ───────────────────
 export interface CompleteExerciseResult {
   sessionId: string;
+  currentExerciseIndex: number;
   recorded: {
     exerciseId: string;
     setsCompleted: number;
@@ -320,10 +354,8 @@ export async function completeExercise(
   let alternative: CompleteExerciseResult['alternative'] = null;
 
   if (input.alternativeChosenId) {
-    // Client picked a specific alternative.
     alternativeChosen = new Types.ObjectId(input.alternativeChosenId);
   } else if (input.tooHard || input.tooEasy) {
-    // Auto-swap: tooHard → easier, tooEasy → harder (via M4's alternatives logic).
     const direction = input.tooHard ? 'easier' : 'harder';
     const userCtx = await getUserContext(userId);
     const alts = await getAlternatives(exerciseId, direction, {
@@ -337,7 +369,6 @@ export async function completeExercise(
         exerciseId: alt.id,
         title: alt.title,
         difficulty: alt.difficulty,
-        // alt.videoUrl from M4 is the storage key — resolve via video service.
         videoUrl: getPlayableVideoUrl(alt.videoUrl ?? '', true),
       };
     }
@@ -352,10 +383,13 @@ export async function completeExercise(
     alternativeChosen,
     restTimerSeconds: input.restTimerSeconds,
   });
+  // Advance the resume pointer and persist so a crash/kill resumes correctly.
+  session.currentExerciseIndex = session.exercises.length;
   await session.save();
 
   return {
     sessionId: session.id,
+    currentExerciseIndex: session.currentExerciseIndex,
     recorded: {
       exerciseId,
       setsCompleted: input.setsCompleted,
@@ -369,18 +403,17 @@ export async function completeExercise(
   };
 }
 
-// ── Part 1.4 — complete the session ───────────────────────────────────────────
-async function getProgramLength(programId?: Types.ObjectId): Promise<number> {
-  if (!programId) return 0;
-  const p = await Program.findById(programId).select('exercises');
-  return p ? p.exercises.length : 0;
+// ── Part 5.5 — complete the session (advances enrollment) ──────────────────────
+export interface CompleteSessionResult {
+  session: SessionDetail;
+  enrollment: AdvanceResult | null;
 }
 
 export async function completeSession(
   userId: string,
   sessionId: string,
   input: CompleteSessionInput
-): Promise<SessionDetail> {
+): Promise<CompleteSessionResult> {
   const session = await loadOwnedSession(userId, sessionId);
   if (isTerminal(session.state)) {
     throw ApiError.badRequest('Session is already finalized');
@@ -398,9 +431,14 @@ export async function completeSession(
     : undefined;
 
   const exercisesCompleted = session.exercises.length;
-  const programLength = await getProgramLength(session.program);
+
+  // Program-day content drives day length (COMPLETED vs PARTIAL) + enrollment advance.
+  const content = session.programDay
+    ? await getProgramDayContentById(session.programDay.toString())
+    : null;
+  const dayLength = content ? content.exercises.length : 0;
   const completion: SessionCompletion =
-    programLength > 0 && exercisesCompleted >= programLength ? 'COMPLETED' : 'PARTIAL';
+    dayLength > 0 && exercisesCompleted >= dayLength ? 'COMPLETED' : 'PARTIAL';
 
   session.durationSeconds = durationSeconds;
   session.exercisesCompleted = exercisesCompleted;
@@ -418,10 +456,21 @@ export async function completeSession(
   if (minutes > 0) await addWeeklyActivityMinutes(userId, minutes);
   // M6/M7: weekly reset + full activity tracking handled there.
 
-  return buildSessionDetail(session);
+  // Advance enrollment progress — SHORT sessions are standalone (skip).
+  let enrollment: AdvanceResult | null = null;
+  if (content && session.programType !== 'SHORT' && session.dayNumber !== undefined) {
+    enrollment = await advanceForCompletedDay(
+      userId,
+      content.program,
+      session.dayNumber,
+      content.durationDays
+    );
+  }
+
+  return { session: await buildSessionDetail(session), enrollment };
 }
 
-// ── Part 1.5 — abandon ────────────────────────────────────────────────────────
+// ── Part 5.6 — abandon (never auto-called; app-close only) ──────────────────────
 export async function abandonSession(userId: string, sessionId: string): Promise<SessionDetail> {
   const session = await loadOwnedSession(userId, sessionId);
   if (isTerminal(session.state)) {
@@ -436,7 +485,6 @@ export async function abandonSession(userId: string, sessionId: string): Promise
   session.state = 'ABANDONED';
   session.endedAt = now;
   await session.save();
-  // Abandoned sessions do NOT count toward weekly minutes.
   return buildSessionDetail(session);
 }
 
@@ -479,7 +527,9 @@ async function buildSessionDetail(session: HydratedDocument<ISession>): Promise<
     id: session.id,
     programType: session.programType,
     shortProgramTag: session.shortProgramTag,
+    dayNumber: session.dayNumber,
     state: session.state,
+    currentExerciseIndex: session.currentExerciseIndex,
     completion: session.completion,
     painCheckin: session.painCheckin.map((p) => ({ area: p.area, score: p.score })),
     safetyOverride: session.safetyOverride,
@@ -501,10 +551,11 @@ export async function getSessionById(userId: string, sessionId: string): Promise
   return buildSessionDetail(session);
 }
 
-// ── Part 2.1 — history ────────────────────────────────────────────────────────
+// ── Records: history ────────────────────────────────────────────────────────────
 export interface HistoryCard {
   id: string;
   date?: Date;
+  dayNumber?: number;
   durationSeconds: number;
   completion?: SessionCompletion;
   avgEaseScore?: number;
@@ -532,6 +583,7 @@ export async function getHistory(
   const data: HistoryCard[] = docs.map((s) => ({
     id: s.id,
     date: s.endedAt ?? s.startedAt,
+    dayNumber: s.dayNumber,
     durationSeconds: s.durationSeconds ?? 0,
     completion: s.completion,
     avgEaseScore: s.avgEaseScore,
@@ -542,13 +594,16 @@ export async function getHistory(
   return { data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) || 0 } };
 }
 
-// ── Part 2.2 — calendar ───────────────────────────────────────────────────────
+// ── Records: calendar ────────────────────────────────────────────────────────────
 export type DayStatus = 'green' | 'amber' | 'grey';
 
 export async function getCalendar(
   userId: string,
   month: string
-): Promise<{ month: string; days: { date: string; status: DayStatus; sessions: number }[] }> {
+): Promise<{
+  month: string;
+  days: { date: string; status: DayStatus; sessions: number; dayNumbers: number[] }[];
+}> {
   const start = new Date(`${month}-01T00:00:00.000Z`);
   const end = new Date(start);
   end.setUTCMonth(end.getUTCMonth() + 1);
@@ -556,15 +611,19 @@ export async function getCalendar(
   const docs = await Session.find({
     user: userId,
     startedAt: { $gte: start, $lt: end },
-  }).select('startedAt completion');
+  }).select('startedAt completion dayNumber');
 
-  const byDay = new Map<string, { completed: number; partial: number; other: number }>();
+  const byDay = new Map<
+    string,
+    { completed: number; partial: number; other: number; dayNumbers: number[] }
+  >();
   for (const s of docs) {
     const day = (s.startedAt ?? s.createdAt).toISOString().slice(0, 10);
-    const cur = byDay.get(day) ?? { completed: 0, partial: 0, other: 0 };
+    const cur = byDay.get(day) ?? { completed: 0, partial: 0, other: 0, dayNumbers: [] };
     if (s.completion === 'COMPLETED') cur.completed += 1;
     else if (s.completion === 'PARTIAL') cur.partial += 1;
-    else cur.other += 1; // skipped / in-progress
+    else cur.other += 1;
+    if (typeof s.dayNumber === 'number') cur.dayNumbers.push(s.dayNumber);
     byDay.set(day, cur);
   }
 
@@ -574,12 +633,13 @@ export async function getCalendar(
       date,
       status: (c.completed > 0 ? 'green' : c.partial > 0 ? 'amber' : 'grey') as DayStatus,
       sessions: c.completed + c.partial + c.other,
+      dayNumbers: c.dayNumbers,
     }));
 
   return { month, days };
 }
 
-// ── Part 2.4 — trends ─────────────────────────────────────────────────────────
+// ── Records: trends ──────────────────────────────────────────────────────────────
 export interface TrendPoint {
   date?: Date;
   score: number;

@@ -39,7 +39,6 @@ export interface IUser {
   // Auth
   phone: string;
   isPhoneVerified: boolean;
-
   // Onboarding
   name?: string;
   email?: string;
@@ -59,6 +58,10 @@ export interface IUser {
 
   // Assignment
   group?: UserGroup;
+  // SCOPE NOTE: quote Section I described level-based progression (3 qualifying
+  // weeks / ease >=7.0). We are now program/day-based (see Enrollment). `level`
+  // is DEMOTED to a difficulty attribute only — no longer the progression
+  // driver. Kept, not deleted. CONFIRM WITH CLIENT (Dr. Harsha) before M6.
   level: number;
 
   // Trial / status
@@ -118,7 +121,6 @@ const userSchema = new Schema<IUser>(
       trim: true,
     },
     isPhoneVerified: { type: Boolean, default: false },
-
     // Onboarding
     name: { type: String, trim: true },
     email: { type: String, trim: true, lowercase: true },
@@ -135,11 +137,9 @@ const userSchema = new Schema<IUser>(
     gadgetType: { type: String, enum: GADGET_TYPES, default: 'none' },
     preferredTime: { type: String }, // e.g. "07:30"
     referralCode: { type: String, trim: true },
-
     // Assignment (value stored here; assignment logic lives in a later module)
     group: { type: String, enum: USER_GROUPS },
     level: { type: Number, default: 1, min: 1 },
-
     // Trial / status
     trialStartDate: { type: Date },
     trialEndDate: { type: Date },
@@ -149,16 +149,13 @@ const userSchema = new Schema<IUser>(
       default: 'active',
       index: true,
     },
-
     // Embedded history
     bmiHistory: { type: [bmiEntrySchema], default: [] },
     weightLog: { type: [weightEntrySchema], default: [] },
-
     // Health
     restingHr: { type: Number, min: 0, max: 250 },
     maxHr: { type: Number, min: 0, max: 250 }, // derived: 220 - age
     lastHealthSyncAt: { type: Date },
-
     // Weekly activity
     weeklyActivity: {
       type: weeklyActivitySchema,

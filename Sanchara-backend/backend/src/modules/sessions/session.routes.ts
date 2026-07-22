@@ -29,6 +29,9 @@ router.use(authenticate, requireActiveAccess);
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 router.post('/start', validate({ body: startSessionSchema }), ctrl.start);
 
+// ── Resume: in-progress session (before /:id) ──────────────────────────────────
+router.get('/active', ctrl.active);
+
 // ── Records / progress (before /:id) ──────────────────────────────────────────
 router.get('/history', validate({ query: historyQuerySchema }), ctrl.history);
 router.get('/calendar', validate({ query: calendarQuerySchema }), ctrl.calendar);

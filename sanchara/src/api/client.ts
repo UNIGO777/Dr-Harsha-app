@@ -10,7 +10,13 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
 import { router } from 'expo-router';
 
-import { getAccessToken } from '@/lib/secureStore';
+import { endpoints } from '@/api/endpoints';
+import {
+  getAccessToken,
+  getRefreshToken,
+  setAccessToken,
+  setRefreshToken,
+} from '@/lib/secureStore';
 import { useAuthStore } from '@/store/authStore';
 
 const baseURL = process.env.EXPO_PUBLIC_API_URL;
@@ -37,25 +43,63 @@ api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
   return config;
 });
 
-// Global 401 handler: an invalid/expired token (access OR onboarding) means the
-// session is dead. Clear it and bounce to the auth/landing screen immediately —
-// this is the real-time logout (no socket needed; expiry is time-based and shows
-// up as a 401 on the next request). Guarded so concurrent 401s redirect once.
-let sessionExpiring = false;
+/**
+ * Exchange the refresh token for a fresh access token (rotating). Uses a bare
+ * axios call so it does NOT re-enter these interceptors. Returns the new access
+ * token, or null if there's no refresh token / the refresh failed.
+ */
+async function refreshAccessToken(): Promise<string | null> {
+  const refreshToken = await getRefreshToken();
+  if (!refreshToken) return null;
+  try {
+    const { data } = await axios.post<{ accessToken: string; refreshToken: string }>(
+      `${baseURL}${endpoints.auth.refresh}`,
+      { refreshToken },
+      { timeout: 15000, headers: { 'Content-Type': 'application/json' } },
+    );
+    await setAccessToken(data.accessToken);
+    await setRefreshToken(data.refreshToken);
+    return data.accessToken;
+  } catch {
+    return null;
+  }
+}
+
+// Global 401 handler with SILENT REFRESH: the 15-min access token expiring is
+// normal — instead of logging out, use the 7-day refresh token to get a new
+// access token and retry the original request. Only if the refresh itself fails
+// (no/expired refresh token) do we clear the session and bounce to auth.
+// A single in-flight refresh is shared across concurrent 401s.
+let refreshPromise: Promise<string | null> | null = null;
 
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    const original = error?.config as
+      | (InternalAxiosRequestConfig & { _retried?: boolean })
+      | undefined;
     const status = error?.response?.status;
-    if (status === 401 && !sessionExpiring) {
-      sessionExpiring = true;
-      try {
-        await useAuthStore.getState().signOut();
-        router.replace('/');
-      } finally {
-        sessionExpiring = false;
+
+    if (status === 401 && original && !original._retried) {
+      original._retried = true;
+
+      if (!refreshPromise) {
+        refreshPromise = refreshAccessToken().finally(() => {
+          refreshPromise = null;
+        });
       }
+      const newToken = await refreshPromise;
+
+      if (newToken) {
+        // Retry — the request interceptor re-attaches the fresh access token.
+        return api(original);
+      }
+
+      // Refresh unavailable/failed → session is truly dead.
+      await useAuthStore.getState().signOut();
+      router.replace('/');
     }
+
     return Promise.reject(error);
   },
 );

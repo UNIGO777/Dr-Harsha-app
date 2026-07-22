@@ -1,8 +1,9 @@
 // Landing / get-started screen. Also the launch gate: onboarded users skip to
 // the app, mid-onboarding users resume onboarding, everyone else sees this.
 import { LinearGradient } from 'expo-linear-gradient';
-import { Redirect, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { Activity } from 'lucide-react-native';
+import { useEffect } from 'react';
 import { View, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -15,9 +16,14 @@ export default function Index() {
   const status = useAuthStore((s) => s.status);
 
   // Gate on the hydrated session (see authStore.hydrate in the root layout).
-  if (status === 'idle') return null; // splash still showing
-  if (status === 'authenticated') return <Redirect href="/(app)/(tabs)/home" />;
-  if (status === 'onboarding') return <Redirect href="/(onboarding)/welcome" />;
+  // Navigate from an effect (never during render) so we don't update navigation
+  // state before the navigator has mounted.
+  useEffect(() => {
+    if (status === 'authenticated') router.replace('/(app)/(tabs)/home');
+    else if (status === 'onboarding') router.replace('/(onboarding)/welcome');
+  }, [status, router]);
+
+  if (status !== 'unauthenticated') return null; // blank while idle / redirecting
 
   return (
     <View className="flex-1 bg-base">

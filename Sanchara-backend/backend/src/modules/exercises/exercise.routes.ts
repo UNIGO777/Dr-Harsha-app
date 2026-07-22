@@ -4,6 +4,7 @@ import { authenticate } from '../../middleware/authenticate';
 import { optionalAuthenticate } from '../../middleware/optionalAuthenticate';
 import { requireActiveAccess } from '../../middleware/requireActiveAccess';
 import { requireRole } from '../../middleware/requireRole';
+import { uploadExerciseMedia } from '../../services/upload.service';
 import * as ctrl from './exercise.controller';
 import {
   listExercisesQuerySchema,
@@ -38,6 +39,15 @@ router.get('/categories', ctrl.getCategories);
 
 // ── Admin: approval queue (before /:id) ───────────────────────────────────────
 router.get('/admin/pending', authenticate, requireRole('ADMIN'), ctrl.listPending);
+
+// ── Staff/Admin: local video upload (multipart) ───────────────────────────────
+router.post(
+  '/upload-video',
+  authenticate,
+  requireRole('CLINICAL_STAFF', 'ADMIN'),
+  uploadExerciseMedia,
+  ctrl.uploadVideo
+);
 
 // ── Staff/Admin: create ───────────────────────────────────────────────────────
 router.post(

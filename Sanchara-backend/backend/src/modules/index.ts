@@ -3,6 +3,8 @@ import healthRoutes from './health/health.routes';
 import authRoutes from './auth/auth.routes';
 import onboardingRoutes from './onboarding/onboarding.routes';
 import exerciseRoutes from './exercises/exercise.routes';
+import programRoutes from './programs/program.routes';
+import enrollmentRoutes from './enrollments/enrollment.routes';
 import sessionRoutes from './sessions/session.routes';
 
 /**
@@ -16,6 +18,8 @@ apiRouter.use('/health', healthRoutes);
 apiRouter.use('/auth', authRoutes);
 apiRouter.use('/onboarding', onboardingRoutes);
 apiRouter.use('/exercises', exerciseRoutes);
+apiRouter.use('/programs', programRoutes);
+apiRouter.use('/enrollments', enrollmentRoutes);
 apiRouter.use('/sessions', sessionRoutes);
 
 export default apiRouter;

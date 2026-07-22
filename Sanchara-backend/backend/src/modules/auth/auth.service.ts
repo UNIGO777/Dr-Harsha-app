@@ -11,7 +11,12 @@ import {
   verifyRefreshToken,
 } from '../../utils/jwt';
 import { sendOtpSms } from '../../services/sms.service';
-import type { AccountStatus, Gender, UserGroup } from '../../constants/enums';
+import type {
+  AccountStatus,
+  Gender,
+  UserGroup,
+  ExerciseHistoryLevel,
+} from '../../constants/enums';
 import type { HydratedDocument } from 'mongoose';
 
 /**
@@ -240,6 +245,34 @@ export async function getSessionStartContext(
     group: user.group,
     level: user.level,
     gender: user.gender,
+  };
+}
+
+export interface RecommendationProfile {
+  goal?: string;
+  painAreas: string[];
+  conditions: string[];
+  exerciseHistory?: ExerciseHistoryLevel;
+  group?: UserGroup;
+}
+
+/**
+ * Onboarding profile fields the recommendation engine scores against. Keeps the
+ * User model out of the programs module.
+ */
+export async function getRecommendationProfile(
+  userId: string
+): Promise<RecommendationProfile | null> {
+  const user: HydratedDocument<IUser> | null = await User.findById(userId).select(
+    'goal painAreas conditions exerciseHistory group'
+  );
+  if (!user) return null;
+  return {
+    goal: user.goal,
+    painAreas: user.painAreas ?? [],
+    conditions: user.conditions ?? [],
+    exerciseHistory: user.exerciseHistory,
+    group: user.group,
   };
 }
 
