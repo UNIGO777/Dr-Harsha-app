@@ -16,8 +16,11 @@ module.exports = {
         primary: '#FFFFFF', // text-primary
         secondary: '#B8B8BE', // text-secondary
         micro: '#9A9AA0', // micro labels
-        accent: '#69D1C0',
+        accent: '#4FE0AC',
+        'accent-hi': '#7BF0C8',
         'accent-text': '#0B0B0C',
+        amber: '#F5C46B',
+        peri: '#8B9BF0',
         danger: '#E5675F',
       },
       fontFamily: {

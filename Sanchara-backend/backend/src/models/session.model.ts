@@ -40,6 +40,7 @@ export interface ISession {
   user: Types.ObjectId;
   program?: Types.ObjectId;
   programDay?: Types.ObjectId; // ref 'ProgramDay' (M2.5)
+  levelNumber?: number; // snapshot: program level at session time (M2.5-L; NOT the user's difficulty level)
   dayNumber?: number; // snapshot of the program day at session time
   programType?: ProgramType;
   shortProgramTag?: string;
@@ -114,6 +115,7 @@ const sessionSchema = new Schema<ISession>(
     },
     program: { type: Schema.Types.ObjectId, ref: 'Program' },
     programDay: { type: Schema.Types.ObjectId, ref: 'ProgramDay' },
+    levelNumber: { type: Number, min: 1 },
     dayNumber: { type: Number, min: 1 },
     programType: { type: String, enum: PROGRAM_TYPES },
     shortProgramTag: { type: String },

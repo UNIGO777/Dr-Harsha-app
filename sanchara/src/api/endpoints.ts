@@ -11,6 +11,7 @@ export const endpoints = {
     verifyOtp: '/auth/verify-otp',
     refresh: '/auth/refresh',
     logout: '/auth/logout',
+    me: '/auth/me',
   },
   onboarding: {
     submit: '/onboarding',
@@ -28,9 +29,17 @@ export const endpoints = {
     root: '/enrollments',
     me: '/enrollments/me',
     today: '/enrollments/me/today',
+    restDayComplete: '/enrollments/me/rest-day-complete',
+    pause: (id: string) => `/enrollments/${id}/pause`,
+    resume: (id: string) => `/enrollments/${id}/resume`,
   },
   sessions: {
     list: '/sessions',
     start: '/sessions/start',
+    /** In-progress session, for mid-session resume. */
+    active: '/sessions/active',
+    history: '/sessions/history',
+    calendar: '/sessions/calendar',
+    trends: '/sessions/trends',
   },
 } as const;

@@ -6,13 +6,17 @@ import { getExercisesByIds } from '../exercises/exercise.service';
 import {
   getProgramMeta,
   getProgramDayContentByNumber,
+  getLevelsMeta,
   type ProgramMeta,
 } from '../programs/program.service';
 import type { EnrollmentStatus, Difficulty } from '../../constants/enums';
 
 /**
- * Enrollments service. Owns the Enrollment model. Reads program/day content
- * through the programs service and hydrates videos through the video service.
+ * Enrollments service (M2.5-L). Owns the Enrollment model. Progress is now
+ * level-wise: the user advances day-by-day WITHIN a level; finishing a level's
+ * days unlocks the next level; finishing the last level completes the program.
+ * Flat (level-less) programs keep the old day-only behaviour.
+ *
  * A user may hold only ONE ACTIVE enrollment at a time (enforced here).
  */
 
@@ -21,8 +25,11 @@ export interface EnrollmentView {
   programId: string;
   program: ProgramMeta | null;
   status: EnrollmentStatus;
+  currentLevel: number;
   currentDay: number;
   completedDays: number[];
+  completedLevels: number[];
+  totalLevels: number;
   totalDays?: number;
   percentComplete: number;
   startedAt?: Date;
@@ -30,19 +37,35 @@ export interface EnrollmentView {
 }
 
 async function toView(enrollment: HydratedDocument<IEnrollment>): Promise<EnrollmentView> {
-  const program = await getProgramMeta(enrollment.program.toString());
-  const totalDays = program?.durationDays;
+  const programId = enrollment.program.toString();
+  const [program, levels] = await Promise.all([getProgramMeta(programId), getLevelsMeta(programId)]);
+
+  let totalDays: number | undefined;
+  let done: number;
+  if (levels.length > 0) {
+    totalDays = levels.reduce((s, l) => s + l.dayCount, 0);
+    done =
+      enrollment.completedLevels.reduce(
+        (s, ln) => s + (levels.find((l) => l.levelNumber === ln)?.dayCount ?? 0),
+        0
+      ) + enrollment.completedDays.length;
+  } else {
+    totalDays = program?.durationDays;
+    done = enrollment.completedDays.length;
+  }
   const percentComplete =
-    totalDays && totalDays > 0
-      ? Math.min(100, Math.round((enrollment.completedDays.length / totalDays) * 100))
-      : 0;
+    totalDays && totalDays > 0 ? Math.min(100, Math.round((done / totalDays) * 100)) : 0;
+
   return {
     id: enrollment.id,
-    programId: enrollment.program.toString(),
+    programId,
     program,
     status: enrollment.status,
+    currentLevel: enrollment.currentLevel,
     currentDay: enrollment.currentDay,
     completedDays: enrollment.completedDays,
+    completedLevels: enrollment.completedLevels,
+    totalLevels: levels.length,
     totalDays,
     percentComplete,
     startedAt: enrollment.startedAt,
@@ -82,16 +105,21 @@ export async function enroll(
         details: { reason: 'active_enrollment_exists', hint: 'pass ?switch=true to switch programs' },
       });
     }
-    // Switch: pause the existing active enrollment.
     active.status = 'PAUSED';
     await active.save();
   }
 
+  // Start at the program's first level (lowest levelNumber), day 1.
+  const levels = await getLevelsMeta(programId);
+  const firstLevel = levels.length > 0 ? levels[0]!.levelNumber : 1;
+
   const enrollment = await Enrollment.create({
     user: new Types.ObjectId(userId),
     program: new Types.ObjectId(programId),
+    currentLevel: firstLevel,
     currentDay: 1,
     completedDays: [],
+    completedLevels: [],
     status: 'ACTIVE',
     startedAt: new Date(),
   });
@@ -120,6 +148,8 @@ export interface TodayView {
   enrollmentId: string;
   programId: string;
   programDayId: string | null;
+  levelNumber?: number;
+  levelTitle?: string;
   dayNumber: number;
   title?: string;
   isRestDay: boolean;
@@ -127,17 +157,26 @@ export interface TodayView {
   exercises: TodayExercise[];
 }
 
+/** Resolve the ACTIVE enrollment's current-day content (level-aware). */
+async function resolveTodayContent(active: HydratedDocument<IEnrollment>) {
+  const programId = active.program.toString();
+  const levels = await getLevelsMeta(programId);
+  const levelNumber = levels.length > 0 ? active.currentLevel : undefined;
+  return getProgramDayContentByNumber(programId, active.currentDay, levelNumber);
+}
+
 export async function getToday(userId: string): Promise<TodayView> {
   const active = await findActive(userId);
   if (!active) throw ApiError.badRequest('You have no active enrollment');
 
-  const content = await getProgramDayContentByNumber(active.program.toString(), active.currentDay);
+  const content = await resolveTodayContent(active);
   if (!content) {
-    // No template authored for this day yet — return gracefully.
+    // No template authored for this level/day yet — return gracefully.
     return {
       enrollmentId: active.id,
       programId: active.program.toString(),
       programDayId: null,
+      levelNumber: active.currentLevel,
       dayNumber: active.currentDay,
       isRestDay: false,
       hasContent: false,
@@ -145,17 +184,19 @@ export async function getToday(userId: string): Promise<TodayView> {
     };
   }
 
+  const base = {
+    enrollmentId: active.id,
+    programId: active.program.toString(),
+    programDayId: content.id,
+    levelNumber: content.levelNumber,
+    levelTitle: content.levelTitle,
+    dayNumber: content.dayNumber,
+    title: content.title,
+    hasContent: true,
+  };
+
   if (content.isRestDay) {
-    return {
-      enrollmentId: active.id,
-      programId: active.program.toString(),
-      programDayId: content.id,
-      dayNumber: content.dayNumber,
-      title: content.title,
-      isRestDay: true,
-      hasContent: true,
-      exercises: [],
-    };
+    return { ...base, isRestDay: true, exercises: [] };
   }
 
   const views = await getExercisesByIds(content.exercises.map((e) => e.exerciseId));
@@ -179,16 +220,7 @@ export async function getToday(userId: string): Promise<TodayView> {
     })
     .filter((x): x is TodayExercise => x !== null);
 
-  return {
-    enrollmentId: active.id,
-    programId: active.program.toString(),
-    programDayId: content.id,
-    dayNumber: content.dayNumber,
-    title: content.title,
-    isRestDay: false,
-    hasContent: true,
-    exercises,
-  };
+  return { ...base, isRestDay: false, exercises };
 }
 
 // ── pause / resume ─────────────────────────────────────────────────────────────
@@ -218,25 +250,41 @@ export async function resume(userId: string, enrollmentId: string): Promise<Enro
   return toView(enrollment);
 }
 
-// ── progress advance (called by the session engine on complete) ────────────────
+// ── progress advance (session engine + rest days) ──────────────────────────────
 export interface AdvanceResult {
   advanced: boolean;
+  currentLevel?: number;
   currentDay?: number;
   status?: EnrollmentStatus;
   completedDays?: number[];
+  completedLevels?: number[];
+  /** True when this completion finished the level and moved to the next one. */
+  levelAdvanced?: boolean;
+  /** True when this completion finished the whole program. */
+  programCompleted?: boolean;
+}
+
+export interface AdvanceOpts {
+  dayNumber: number;
+  levelNumber?: number;
+  /** Fallback total for flat (level-less) programs. */
+  durationDays?: number;
 }
 
 /**
  * Advance the user's ACTIVE enrollment for `programId` when they complete a day.
+ * Level-aware: completing the last day of a level pushes the level into
+ * completedLevels, moves to the next level's day 1 (completedDays resets), and
+ * completing the last level completes the program.
+ *
  * No-op for SHORT/standalone sessions (no active enrollment for that program).
- * Idempotent: only advances when the completed day equals currentDay and hasn't
- * been recorded already.
+ * Idempotent: only advances when the completed (level, day) equals the
+ * enrollment's current position and hasn't been recorded already.
  */
 export async function advanceForCompletedDay(
   userId: string,
   programId: string,
-  dayNumber: number,
-  durationDays?: number
+  opts: AdvanceOpts
 ): Promise<AdvanceResult> {
   const enrollment = await Enrollment.findOne({
     user: userId,
@@ -244,22 +292,82 @@ export async function advanceForCompletedDay(
     status: 'ACTIVE',
   });
   if (!enrollment) return { advanced: false };
-  if (enrollment.completedDays.includes(dayNumber)) return { advanced: false };
-  if (dayNumber !== enrollment.currentDay) return { advanced: false };
 
-  enrollment.completedDays.push(dayNumber);
-  enrollment.currentDay = dayNumber + 1;
+  const levels = await getLevelsMeta(programId);
+  let levelAdvanced = false;
+  let programCompleted = false;
 
-  if (durationDays && enrollment.currentDay > durationDays) {
-    enrollment.status = 'COMPLETED';
-    enrollment.completedAt = new Date();
+  if (levels.length > 0) {
+    // Level-aware path.
+    if (opts.levelNumber === undefined) return { advanced: false };
+    if (opts.levelNumber !== enrollment.currentLevel) return { advanced: false };
+    if (opts.dayNumber !== enrollment.currentDay) return { advanced: false };
+    if (enrollment.completedDays.includes(opts.dayNumber)) return { advanced: false };
+
+    enrollment.completedDays.push(opts.dayNumber);
+    enrollment.currentDay = opts.dayNumber + 1;
+
+    const level = levels.find((l) => l.levelNumber === enrollment.currentLevel);
+    if (level && enrollment.currentDay > level.dayCount) {
+      // LEVEL COMPLETE → unlock the next level (or finish the program).
+      enrollment.completedLevels.push(enrollment.currentLevel);
+      const next = levels.find((l) => l.levelNumber > enrollment.currentLevel);
+      if (next) {
+        enrollment.currentLevel = next.levelNumber;
+        enrollment.currentDay = 1;
+        enrollment.completedDays = [];
+        levelAdvanced = true;
+      } else {
+        enrollment.status = 'COMPLETED';
+        enrollment.completedAt = new Date();
+        programCompleted = true;
+      }
+    }
+  } else {
+    // Flat (level-less) path — original day-only behaviour.
+    if (enrollment.completedDays.includes(opts.dayNumber)) return { advanced: false };
+    if (opts.dayNumber !== enrollment.currentDay) return { advanced: false };
+
+    enrollment.completedDays.push(opts.dayNumber);
+    enrollment.currentDay = opts.dayNumber + 1;
+
+    if (opts.durationDays && enrollment.currentDay > opts.durationDays) {
+      enrollment.status = 'COMPLETED';
+      enrollment.completedAt = new Date();
+      programCompleted = true;
+    }
   }
-  await enrollment.save();
 
+  await enrollment.save();
   return {
     advanced: true,
+    currentLevel: enrollment.currentLevel,
     currentDay: enrollment.currentDay,
     status: enrollment.status,
     completedDays: enrollment.completedDays,
+    completedLevels: enrollment.completedLevels,
+    levelAdvanced,
+    programCompleted,
   };
+}
+
+/**
+ * Rest days have no session to complete, so the app calls this to mark today's
+ * rest day done and advance (same level-up rules as a workout day).
+ */
+export async function completeRestDay(userId: string): Promise<AdvanceResult> {
+  const active = await findActive(userId);
+  if (!active) throw ApiError.badRequest('You have no active enrollment');
+
+  const content = await resolveTodayContent(active);
+  if (!content) throw ApiError.badRequest('No content for the current day');
+  if (!content.isRestDay) {
+    throw ApiError.badRequest('Today is not a rest day — complete the workout session instead');
+  }
+
+  return advanceForCompletedDay(userId, active.program.toString(), {
+    dayNumber: content.dayNumber,
+    levelNumber: content.levelNumber,
+    durationDays: content.durationDays,
+  });
 }

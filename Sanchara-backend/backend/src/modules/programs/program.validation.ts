@@ -42,6 +42,21 @@ export const publishProgramSchema = z.object({
   isPublished: z.boolean(),
 });
 
+// ── Program levels (M2.5-L) ───────────────────────────────────────────────────
+export const createLevelSchema = z.object({
+  levelNumber: z.number().int().min(1),
+  title: z.string().trim().max(200).optional(),
+  description: z.string().trim().max(2000).optional(),
+});
+
+export const updateLevelSchema = z
+  .object({
+    levelNumber: z.number().int().min(1).optional(),
+    title: z.string().trim().max(200).optional(),
+    description: z.string().trim().max(2000).optional(),
+  })
+  .refine((d) => Object.keys(d).length > 0, { message: 'Provide at least one field to update' });
+
 // ── Program days ──────────────────────────────────────────────────────────────
 const dayExercise = z.object({
   exercise: objectId,
@@ -52,6 +67,8 @@ const dayExercise = z.object({
 
 export const createDaySchema = z
   .object({
+    // Required when the program has levels; must be omitted when it doesn't.
+    levelNumber: z.number().int().min(1).optional(),
     dayNumber: z.number().int().min(1),
     title: z.string().trim().max(200).optional(),
     description: z.string().trim().max(2000).optional(),
@@ -66,6 +83,7 @@ export const createDaySchema = z
 
 export const updateDaySchema = z
   .object({
+    levelNumber: z.number().int().min(1).optional(),
     dayNumber: z.number().int().min(1).optional(),
     title: z.string().trim().max(200).optional(),
     description: z.string().trim().max(2000).optional(),
@@ -75,20 +93,31 @@ export const updateDaySchema = z
   })
   .refine((d) => Object.keys(d).length > 0, { message: 'Provide at least one field to update' });
 
+export const listDaysQuerySchema = z.object({
+  levelNumber: z.coerce.number().int().min(1).optional(),
+});
+
 // ── Params & public queries ───────────────────────────────────────────────────
 export const programIdParamSchema = z.object({ id: objectId });
 export const programDayParamSchema = z.object({ id: objectId, dayId: objectId });
+export const programLevelParamSchema = z.object({ id: objectId, levelId: objectId });
 
 export const listProgramsQuerySchema = z.object({
   goalTag: z.string().trim().min(1).optional(),
   targetAreas: z.string().trim().min(1).optional(),
   difficultyLevel: z.enum(DIFFICULTIES).optional(),
+  // Lets the app fetch just the standalone SHORT sessions ("only got 5 minutes?")
+  // separately from the enrollable STANDARD catalog.
+  type: z.enum(PROGRAM_TYPES).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
 export type CreateProgramInput = z.infer<typeof createProgramSchema>;
 export type UpdateProgramInput = z.infer<typeof updateProgramSchema>;
+export type CreateLevelInput = z.infer<typeof createLevelSchema>;
+export type UpdateLevelInput = z.infer<typeof updateLevelSchema>;
 export type CreateDayInput = z.infer<typeof createDaySchema>;
 export type UpdateDayInput = z.infer<typeof updateDaySchema>;
+export type ListDaysQuery = z.infer<typeof listDaysQuerySchema>;
 export type ListProgramsQuery = z.infer<typeof listProgramsQuerySchema>;

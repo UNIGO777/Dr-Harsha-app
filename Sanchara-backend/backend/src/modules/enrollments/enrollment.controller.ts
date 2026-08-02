@@ -37,6 +37,16 @@ export async function getToday(req: Request, res: Response, next: NextFunction):
   }
 }
 
+/** POST /api/enrollments/me/rest-day-complete — advance past a rest day (no session exists). */
+export async function completeRestDay(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const result = await enrollmentService.completeRestDay(userId(req));
+    res.json({ success: true, ...result });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function pause(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const enrollment = await enrollmentService.pause(userId(req), req.params.id as string);

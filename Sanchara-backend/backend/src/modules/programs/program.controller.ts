@@ -5,8 +5,11 @@ import { getRecommendations } from './recommendation.service';
 import type {
   CreateProgramInput,
   UpdateProgramInput,
+  CreateLevelInput,
+  UpdateLevelInput,
   CreateDayInput,
   UpdateDayInput,
+  ListDaysQuery,
   ListProgramsQuery,
 } from './program.validation';
 
@@ -49,6 +52,47 @@ export async function publishProgram(req: Request, res: Response, next: NextFunc
   }
 }
 
+// ── Levels (M2.5-L) ───────────────────────────────────────────────────────────
+export async function createLevel(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const level = await programService.createLevel(req.params.id as string, req.body as CreateLevelInput);
+    res.status(201).json({ success: true, level });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function updateLevel(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const level = await programService.updateLevel(
+      req.params.id as string,
+      req.params.levelId as string,
+      req.body as UpdateLevelInput
+    );
+    res.json({ success: true, level });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function deleteLevel(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    await programService.deleteLevel(req.params.id as string, req.params.levelId as string);
+    res.json({ success: true, message: 'Level deleted' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function listLevels(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const levels = await programService.listLevels(req.params.id as string);
+    res.json({ success: true, levels });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function createDay(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const day = await programService.createDay(req.params.id as string, req.body as CreateDayInput);
@@ -82,7 +126,8 @@ export async function deleteDay(req: Request, res: Response, next: NextFunction)
 
 export async function listDays(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const days = await programService.listDays(req.params.id as string);
+    const { levelNumber } = req.query as unknown as ListDaysQuery;
+    const days = await programService.listDays(req.params.id as string, levelNumber);
     res.json({ success: true, days });
   } catch (err) {
     next(err);

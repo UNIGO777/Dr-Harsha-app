@@ -8,11 +8,44 @@
  *
  * `phone` must be E.164-ish (backend regex /^\+?[1-9]\d{9,14}$/), e.g. "+919876543210".
  */
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 
 import { api } from '@/api/client';
 import { endpoints } from '@/api/endpoints';
 import type { User } from '@/types';
+
+/** The authenticated user's own profile — GET /auth/me. */
+export interface MyProfile {
+  id: string;
+  name?: string;
+  phone: string;
+  email?: string;
+  age?: number;
+  gender?: 'male' | 'female' | 'other';
+  goal?: string;
+  conditions: string[];
+  painAreas: string[];
+  group?: 'GROUP_1' | 'GROUP_2' | 'WAITLIST';
+  /** Difficulty attribute only — NOT the progression driver (that's enrollment levels). */
+  level: number;
+  accountStatus: 'active' | 'waitlisted' | 'locked';
+  trialEndDate?: string;
+  /** Passes the active-access gate right now (trial valid / subscribed). */
+  entitled: boolean;
+  bmi?: number;
+  weeklyActivity: { currentMinutes: number; weekStartDate?: string };
+}
+
+export function useMe(enabled = true) {
+  return useQuery({
+    queryKey: ['auth', 'me'],
+    enabled,
+    queryFn: async () => {
+      const { data } = await api.get<{ user: MyProfile }>(endpoints.auth.me);
+      return data.user;
+    },
+  });
+}
 
 export interface RequestOtpResponse {
   success: boolean;

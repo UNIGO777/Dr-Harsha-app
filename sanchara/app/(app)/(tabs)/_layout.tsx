@@ -1,7 +1,11 @@
 // Bottom tabs for the main app. Dark tab bar, accent for the active tab, lucide
 // line icons matching the minimal aesthetic.
+//
+// Route filenames stay (home/library/progress/profile) so existing links keep
+// working; only the visible labels + icons follow the product language:
+// Plan · Activity · History · Support.
 import { Tabs } from 'expo-router';
-import { Dumbbell, House, TrendingUp, User } from 'lucide-react-native';
+import { CalendarCheck, Dumbbell, LifeBuoy, LineChart } from 'lucide-react-native';
 
 import { colors } from '@/theme/tokens';
 
@@ -15,25 +19,43 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
+          height: 64,
+          paddingTop: 6,
         },
-        tabBarLabelStyle: { fontFamily: 'Inter-Medium', fontSize: 11 },
+        tabBarLabelStyle: {
+          fontFamily: 'Inter-SemiBold',
+          fontSize: 10,
+          letterSpacing: 1,
+        },
       }}
     >
       <Tabs.Screen
         name="home"
-        options={{ title: 'Home', tabBarIcon: ({ color, size }) => <House color={color} size={size} /> }}
+        options={{
+          title: 'PLAN',
+          tabBarIcon: ({ color, size }) => <CalendarCheck color={color} size={size} />,
+        }}
       />
       <Tabs.Screen
         name="library"
-        options={{ title: 'Library', tabBarIcon: ({ color, size }) => <Dumbbell color={color} size={size} /> }}
+        options={{
+          title: 'ACTIVITY',
+          tabBarIcon: ({ color, size }) => <Dumbbell color={color} size={size} />,
+        }}
       />
       <Tabs.Screen
         name="progress"
-        options={{ title: 'Progress', tabBarIcon: ({ color, size }) => <TrendingUp color={color} size={size} /> }}
+        options={{
+          title: 'HISTORY',
+          tabBarIcon: ({ color, size }) => <LineChart color={color} size={size} />,
+        }}
       />
       <Tabs.Screen
         name="profile"
-        options={{ title: 'Profile', tabBarIcon: ({ color, size }) => <User color={color} size={size} /> }}
+        options={{
+          title: 'SUPPORT',
+          tabBarIcon: ({ color, size }) => <LifeBuoy color={color} size={size} />,
+        }}
       />
     </Tabs>
   );

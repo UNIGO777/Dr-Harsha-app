@@ -21,6 +21,7 @@ router.post('/', validate({ body: enrollSchema, query: enrollQuerySchema }), ctr
 
 router.get('/me', ctrl.getMine);
 router.get('/me/today', ctrl.getToday);
+router.post('/me/rest-day-complete', ctrl.completeRestDay);
 
 router.patch('/:id/pause', validate({ params: enrollmentIdParamSchema }), ctrl.pause);
 router.patch('/:id/resume', validate({ params: enrollmentIdParamSchema }), ctrl.resume);

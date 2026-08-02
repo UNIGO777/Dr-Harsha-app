@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
+import { ApiError } from '../../utils/ApiError';
 import * as authService from './auth.service';
 import type {
   RequestOtpInput,
@@ -48,6 +49,18 @@ export async function refresh(
     const { refreshToken } = req.body as RefreshInput;
     const tokens = await authService.rotateRefreshToken(refreshToken);
     res.status(200).json({ success: true, ...tokens });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** GET /api/auth/me — the authenticated user's own profile. */
+export async function me(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    if (!req.user) throw ApiError.unauthorized('Not authenticated');
+    const profile = await authService.getMyProfile(req.user.userId);
+    if (!profile) throw ApiError.notFound('User not found');
+    res.status(200).json({ success: true, user: profile });
   } catch (err) {
     next(err);
   }

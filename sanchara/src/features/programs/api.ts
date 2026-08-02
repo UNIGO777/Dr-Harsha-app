@@ -27,14 +27,28 @@ export interface ProgramSummary {
 }
 
 export interface DaySummary {
+  /** ProgramDay id — required by POST /sessions/start. */
+  id: string;
   dayNumber: number;
   title?: string;
   isRestDay: boolean;
   exerciseCount: number;
 }
 
+/** One difficulty tier inside a program: Program → Level → Day → Exercises. */
+export interface PublicLevel {
+  levelNumber: number;
+  title?: string;
+  description?: string;
+  dayCount: number;
+  days: DaySummary[];
+}
+
 export interface ProgramDetail extends ProgramSummary {
   dayCount: number;
+  totalLevels: number;
+  levels: PublicLevel[];
+  /** Flat day list — populated only for level-less programs (e.g. SHORT). */
   days: DaySummary[];
 }
 
@@ -48,6 +62,8 @@ export interface ProgramFilters {
   goalTag?: string;
   targetAreas?: string;
   difficultyLevel?: Difficulty;
+  /** Defaults to STANDARD server-side; pass 'SHORT' for standalone quick sessions. */
+  type?: ProgramType;
 }
 
 export function useRecommendedPrograms() {
@@ -83,6 +99,22 @@ export function useProgramsInfinite(pageSize = 12, filters?: ProgramFilters) {
     },
     getNextPageParam: (last) =>
       last.pagination.page < last.pagination.totalPages ? last.pagination.page + 1 : undefined,
+  });
+}
+
+/**
+ * Standalone SHORT programs — the "only got 5 minutes?" row. These never touch
+ * enrollment progress but their minutes still count toward the weekly target.
+ */
+export function useShortPrograms(limit = 8) {
+  return useQuery({
+    queryKey: ['programs', 'short', limit],
+    queryFn: async () => {
+      const { data } = await api.get<PagedPrograms>(endpoints.programs.list, {
+        params: { type: 'SHORT', limit },
+      });
+      return data.data;
+    },
   });
 }
 

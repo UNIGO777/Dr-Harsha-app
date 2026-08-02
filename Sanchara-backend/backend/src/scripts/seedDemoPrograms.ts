@@ -54,8 +54,8 @@ const DURATIONS = [15, 21, 30, 45, 60, 90];
 const AGE_SETS = [['GROUP_1'], ['GROUP_2'], ['GROUP_1', 'GROUP_2']];
 
 /** Deterministic pick so re-runs are stable. */
-const pick = <T,>(arr: T[], i: number): T => arr[i % arr.length]!;
-const pickN = <T,>(arr: T[], i: number, n: number): T[] => {
+const pick = <T,>(arr: readonly T[], i: number): T => arr[i % arr.length]!;
+const pickN = <T,>(arr: readonly T[], i: number, n: number): T[] => {
   const out: T[] = [];
   for (let k = 0; k < n; k++) out.push(arr[(i + k * 3) % arr.length]!);
   return [...new Set(out)];

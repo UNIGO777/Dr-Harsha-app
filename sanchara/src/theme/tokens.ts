@@ -24,9 +24,18 @@ export const colors = {
   /** Uppercase, letter-spaced micro labels. */
   microLabel: '#9A9AA0',
   /** Brand accent — buttons, active/focus, logo mark, highlights. */
-  accent: '#69D1C0',
+  accent: '#4FE0AC',
+  /** Brighter accent tint for gradient highlights / glows. */
+  accentHi: '#7BF0C8',
   /** Near-black text used ON accent fills. */
   accentText: '#0B0B0C',
+  /**
+   * Warm accent — the "heart" of the instrument. Ring's outer arc, wallet
+   * balance meta, one quick-session tile. Never for destructive meaning.
+   */
+  amber: '#F5C46B',
+  /** Tertiary tint — used sparingly (a single quick-session tile). */
+  peri: '#8B9BF0',
   /** Muted red — safety warnings ONLY, used sparingly. */
   danger: '#E5675F',
   /** Hairline borders / dividers on dark surfaces. */

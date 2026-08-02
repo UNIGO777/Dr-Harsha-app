@@ -86,6 +86,7 @@ export interface StartedSession {
   blocked: false;
   sessionId: string;
   state: SessionState;
+  levelNumber?: number;
   dayNumber?: number;
   programType?: ProgramType;
   currentExerciseIndex: number;
@@ -121,6 +122,7 @@ export interface SessionDetail {
   id: string;
   programType?: ProgramType;
   shortProgramTag?: string;
+  levelNumber?: number;
   dayNumber?: number;
   state: SessionState;
   currentExerciseIndex: number;
@@ -206,6 +208,7 @@ export async function startSession(
     user: new Types.ObjectId(userId),
     program: new Types.ObjectId(content.program),
     programDay: new Types.ObjectId(content.id),
+    levelNumber: content.levelNumber,
     dayNumber: content.dayNumber,
     programType: content.programType, // server-authoritative (from the program)
     // SHORT sessions carry the analytics tag but never touch enrollment progress.
@@ -228,7 +231,12 @@ export async function startSession(
       actorRole: 'USER',
       action: 'SAFETY_OVERRIDE',
       reason: input.safetyOverrideReason ?? `User override: max pain score ${maxScore}`,
-      metadata: { sessionId: session.id, maxScore, dayNumber: content.dayNumber },
+      metadata: {
+        sessionId: session.id,
+        maxScore,
+        levelNumber: content.levelNumber,
+        dayNumber: content.dayNumber,
+      },
     });
   }
 
@@ -236,6 +244,7 @@ export async function startSession(
     blocked: false,
     sessionId: session.id,
     state: session.state,
+    levelNumber: session.levelNumber,
     dayNumber: session.dayNumber,
     programType: session.programType,
     currentExerciseIndex: session.currentExerciseIndex,
@@ -252,6 +261,7 @@ export interface ActiveSessionResult {
   session?: {
     sessionId: string;
     state: SessionState;
+    levelNumber?: number;
     dayNumber?: number;
     programType?: ProgramType;
     currentExerciseIndex: number;
@@ -280,6 +290,7 @@ export async function getActiveSession(userId: string): Promise<ActiveSessionRes
     session: {
       sessionId: session.id,
       state: session.state,
+      levelNumber: session.levelNumber,
       dayNumber: session.dayNumber,
       programType: session.programType,
       currentExerciseIndex: session.currentExerciseIndex,
@@ -459,12 +470,11 @@ export async function completeSession(
   // Advance enrollment progress — SHORT sessions are standalone (skip).
   let enrollment: AdvanceResult | null = null;
   if (content && session.programType !== 'SHORT' && session.dayNumber !== undefined) {
-    enrollment = await advanceForCompletedDay(
-      userId,
-      content.program,
-      session.dayNumber,
-      content.durationDays
-    );
+    enrollment = await advanceForCompletedDay(userId, content.program, {
+      levelNumber: session.levelNumber,
+      dayNumber: session.dayNumber,
+      durationDays: content.durationDays,
+    });
   }
 
   return { session: await buildSessionDetail(session), enrollment };
@@ -527,6 +537,7 @@ async function buildSessionDetail(session: HydratedDocument<ISession>): Promise<
     id: session.id,
     programType: session.programType,
     shortProgramTag: session.shortProgramTag,
+    levelNumber: session.levelNumber,
     dayNumber: session.dayNumber,
     state: session.state,
     currentExerciseIndex: session.currentExerciseIndex,
@@ -555,6 +566,7 @@ export async function getSessionById(userId: string, sessionId: string): Promise
 export interface HistoryCard {
   id: string;
   date?: Date;
+  levelNumber?: number;
   dayNumber?: number;
   durationSeconds: number;
   completion?: SessionCompletion;
@@ -583,6 +595,7 @@ export async function getHistory(
   const data: HistoryCard[] = docs.map((s) => ({
     id: s.id,
     date: s.endedAt ?? s.startedAt,
+    levelNumber: s.levelNumber,
     dayNumber: s.dayNumber,
     durationSeconds: s.durationSeconds ?? 0,
     completion: s.completion,

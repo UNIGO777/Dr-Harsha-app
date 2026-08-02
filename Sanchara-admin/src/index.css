@@ -1,0 +1,62 @@
+@import 'tailwindcss';
+
+/**
+ * Sanchara clinical portal — design tokens.
+ *
+ * Tailwind v4 keeps config in CSS (no tailwind.config.js). Values mirror the
+ * patient app's palette (sanchara/src/theme/tokens.ts) so the portal and the
+ * phone app read as one product:
+ *   mint  = primary action / active state
+ *   amber = warmth + "needs attention" (never alarm)
+ *   red   = genuine errors only — this product associates red with pain
+ */
+@theme {
+  --color-canvas: #0b0f0e;
+  --color-surface: #121817;
+  --color-surface-hi: #1a2220;
+  --color-edge: #232b28;
+
+  --color-ink: #f0f4f2;
+  --color-ink-dim: #8a9691;
+  --color-ink-faint: #5d6763;
+
+  --color-mint: #4fe0ac;
+  --color-mint-hi: #7bf0c8;
+  --color-mint-ink: #06231a;
+
+  --color-amber: #f5c46b;
+  --color-peri: #8b9bf0;
+  --color-danger: #e5675f;
+
+  --radius-card: 14px;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Visible focus ring — admin work is keyboard-heavy. */
+  :focus-visible {
+    outline: 2px solid var(--color-mint);
+    outline-offset: 2px;
+  }
+}
+
+/* Uppercase micro label for section headers and table columns. */
+@utility label-micro {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-ink-dim);
+}

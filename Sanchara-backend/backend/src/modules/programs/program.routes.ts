@@ -8,10 +8,14 @@ import {
   createProgramSchema,
   updateProgramSchema,
   publishProgramSchema,
+  createLevelSchema,
+  updateLevelSchema,
   createDaySchema,
   updateDaySchema,
+  listDaysQuerySchema,
   programIdParamSchema,
   programDayParamSchema,
+  programLevelParamSchema,
   listProgramsQuerySchema,
 } from './program.validation';
 
@@ -34,8 +38,34 @@ router.get('/', ...activeUser, validate({ query: listProgramsQuerySchema }), ctr
 // ── Management: programs ───────────────────────────────────────────────────────
 router.post('/', ...staffOnly, validate({ body: createProgramSchema }), ctrl.createProgram);
 
+// ── Management: levels (M2.5-L, before /:id) ───────────────────────────────────
+router.get('/:id/levels', ...staffOnly, validate({ params: programIdParamSchema }), ctrl.listLevels);
+router.post(
+  '/:id/levels',
+  ...staffOnly,
+  validate({ params: programIdParamSchema, body: createLevelSchema }),
+  ctrl.createLevel
+);
+router.patch(
+  '/:id/levels/:levelId',
+  ...staffOnly,
+  validate({ params: programLevelParamSchema, body: updateLevelSchema }),
+  ctrl.updateLevel
+);
+router.delete(
+  '/:id/levels/:levelId',
+  ...staffOnly,
+  validate({ params: programLevelParamSchema }),
+  ctrl.deleteLevel
+);
+
 // ── Management: days (before /:id) ─────────────────────────────────────────────
-router.get('/:id/days', ...staffOnly, validate({ params: programIdParamSchema }), ctrl.listDays);
+router.get(
+  '/:id/days',
+  ...staffOnly,
+  validate({ params: programIdParamSchema, query: listDaysQuerySchema }),
+  ctrl.listDays
+);
 router.post(
   '/:id/days',
   ...staffOnly,

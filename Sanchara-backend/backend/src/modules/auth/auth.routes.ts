@@ -2,6 +2,7 @@ import { Router } from 'express';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { isProd } from '../../config/env';
 import { validate } from '../../middleware/validate';
+import { authenticate } from '../../middleware/authenticate';
 import * as authController from './auth.controller';
 import {
   requestOtpSchema,
@@ -54,5 +55,8 @@ router.post('/verify-otp', validate({ body: verifyOtpSchema }), authController.v
 router.post('/refresh', validate({ body: refreshSchema }), authController.refresh);
 
 router.post('/logout', validate({ body: logoutSchema }), authController.logout);
+
+// The only authenticated route in this module — returns the caller's profile.
+router.get('/me', authenticate, authController.me);
 
 export default router;

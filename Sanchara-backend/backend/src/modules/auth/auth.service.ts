@@ -248,6 +248,56 @@ export async function getSessionStartContext(
   };
 }
 
+export interface MyProfile {
+  id: string;
+  name?: string;
+  phone: string;
+  email?: string;
+  age?: number;
+  gender?: Gender;
+  goal?: string;
+  conditions: string[];
+  painAreas: string[];
+  group?: UserGroup;
+  level: number;
+  accountStatus: AccountStatus;
+  trialEndDate?: Date;
+  entitled: boolean;
+  bmi?: number;
+  weeklyActivity: { currentMinutes: number; weekStartDate?: Date };
+}
+
+/**
+ * The authenticated user's own profile — backs the app's greeting, weekly
+ * activity ring and entitlement-aware UI. Only ever returns the caller's own
+ * document (userId comes from the verified access token).
+ */
+export async function getMyProfile(userId: string): Promise<MyProfile | null> {
+  const user: HydratedDocument<IUser> | null = await User.findById(userId);
+  if (!user) return null;
+  return {
+    id: user.id,
+    name: user.name,
+    phone: user.phone,
+    email: user.email,
+    age: user.age,
+    gender: user.gender,
+    goal: user.goal,
+    conditions: user.conditions ?? [],
+    painAreas: user.painAreas ?? [],
+    group: user.group,
+    level: user.level,
+    accountStatus: user.accountStatus,
+    trialEndDate: user.trialEndDate,
+    entitled: evaluateEntitlement(user.accountStatus, user.trialEndDate),
+    bmi: user.bmi,
+    weeklyActivity: {
+      currentMinutes: user.weeklyActivity?.currentMinutes ?? 0,
+      weekStartDate: user.weeklyActivity?.weekStartDate,
+    },
+  };
+}
+
 export interface RecommendationProfile {
   goal?: string;
   painAreas: string[];

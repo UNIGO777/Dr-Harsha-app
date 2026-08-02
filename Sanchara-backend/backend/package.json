@@ -14,6 +14,7 @@
     "start": "node dist/server.js",
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
+    "seed:staff": "tsx src/scripts/seedStaff.ts",
     "seed:exercises": "tsx src/scripts/seedExercises.ts",
     "seed:programs": "tsx src/scripts/seedPrograms.ts",
     "seed:demo": "tsx src/scripts/seedDemoPrograms.ts"
