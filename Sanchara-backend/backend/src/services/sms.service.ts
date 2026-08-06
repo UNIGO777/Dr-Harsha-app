@@ -1,4 +1,5 @@
 import { logger } from '../utils/logger';
+import { isProd } from '../config/env';
 
 /**
  * SMS / WhatsApp service.
@@ -28,10 +29,27 @@ export function sendSms(to: string, body: string): Promise<void> {
   return activeProvider.sendSms(to, body);
 }
 
-/** Convenience wrapper for the OTP message copy. */
-export function sendOtpSms(phone: string, otp: string, ttlMinutes: number): Promise<void> {
-  return sendSms(
+/**
+ * Convenience wrapper for the OTP message copy.
+ *
+ * In the local phase the code is also printed as a boxed banner so it's easy to
+ * spot in a busy dev console — you should never have to grep for it.
+ */
+export async function sendOtpSms(
+  phone: string,
+  otp: string,
+  ttlMinutes: number
+): Promise<void> {
+  await sendSms(
     phone,
     `Your Sanchara verification code is ${otp}. It expires in ${ttlMinutes} minutes.`
   );
+
+  if (!isProd) {
+    const rows = [`OTP ${otp}`, `for ${phone}`, `expires in ${ttlMinutes} min`];
+    const width = Math.max(...rows.map((r) => r.length)) + 2;
+    const border = '─'.repeat(width);
+    const boxed = rows.map((r) => `│ ${r.padEnd(width - 1)}│`).join('\n');
+    logger.info(`\n┌${border}┐\n${boxed}\n└${border}┘`);
+  }
 }

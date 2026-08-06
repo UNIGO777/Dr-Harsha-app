@@ -16,9 +16,17 @@ export async function requestOtp(
 ): Promise<void> {
   try {
     const { phone } = req.body as RequestOtpInput;
-    await authService.requestOtp(phone);
-    // OTP is logged to the console (mock SMS); never returned in the response.
-    res.status(200).json({ success: true, message: 'OTP sent' });
+    const devOtp = await authService.requestOtp(phone);
+
+    // The OTP is always logged to the console (mock SMS). OUTSIDE PRODUCTION it
+    // is also echoed here so local clients can auto-fill it without tailing the
+    // server log — `requestOtp` returns undefined in production, so this key
+    // simply disappears there.
+    res.status(200).json({
+      success: true,
+      message: 'OTP sent',
+      ...(devOtp ? { devOtp } : {}),
+    });
   } catch (err) {
     next(err);
   }

@@ -11,6 +11,7 @@ import {
   verifyRefreshToken,
 } from '../../utils/jwt';
 import { sendOtpSms } from '../../services/sms.service';
+import { isProd } from '../../config/env';
 import type {
   AccountStatus,
   Gender,
@@ -44,8 +45,13 @@ export type VerifyOtpResult =
 /**
  * Generate a 6-digit OTP, store it hashed with a fresh expiry + reset attempt
  * counter (one active OTP per phone), and "send" it (mock: logged to console).
+ *
+ * @returns the plaintext OTP **outside production only**, so local clients can
+ *          show it without tailing the server log. `undefined` in production —
+ *          returning it there would hand anyone who knows a phone number a free
+ *          login. The caller must respect the same gate.
  */
-export async function requestOtp(phone: string): Promise<void> {
+export async function requestOtp(phone: string): Promise<string | undefined> {
   const otp = randomInt(OTP_LENGTH_MIN, OTP_LENGTH_MAX).toString();
   const otpHash = await bcrypt.hash(otp, BCRYPT_ROUNDS);
   const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000);
@@ -58,6 +64,8 @@ export async function requestOtp(phone: string): Promise<void> {
 
   // MOCK delivery — real SMS provider slots in behind this call later.
   await sendOtpSms(phone, otp, OTP_TTL_MINUTES);
+
+  return isProd ? undefined : otp;
 }
 
 /**
