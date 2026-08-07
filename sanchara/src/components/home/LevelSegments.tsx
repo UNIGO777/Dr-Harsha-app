@@ -7,7 +7,7 @@
  */
 import { View } from 'react-native';
 
-import { colors } from '@/theme/tokens';
+import { useThemeColors } from '@/theme/useTheme';
 
 interface LevelSegmentsProps {
   totalLevels: number;
@@ -21,6 +21,7 @@ export function LevelSegments({
   currentLevel,
   currentProgress,
 }: LevelSegmentsProps) {
+  const colors = useThemeColors();
   return (
     <View
       className="w-full flex-row items-center"

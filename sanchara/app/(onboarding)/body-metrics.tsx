@@ -9,7 +9,7 @@ import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
 import { STEP } from '@/features/onboarding/steps';
 import { bmiCategory, calculateBmi } from '@/lib/bmi';
 import { useOnboardingStore } from '@/store/onboardingStore';
-import { colors } from '@/theme/tokens';
+import { useResolvedTheme, useThemeColors } from '@/theme/useTheme';
 
 const CATEGORY_LABEL: Record<ReturnType<typeof bmiCategory>, string> = {
   underweight: 'Underweight',
@@ -31,11 +31,14 @@ function MetricField({
   onChange: (t: string) => void;
   placeholder: string;
 }) {
+  const colors = useThemeColors();
+  const theme = useResolvedTheme();
   return (
     <View className="flex-1">
       <Text className="mb-2 font-sans text-xs uppercase tracking-[2px] text-micro">{label}</Text>
       <View className="h-16 flex-row items-center rounded-input border border-border bg-input-fill px-4">
         <TextInput
+          keyboardAppearance={theme}
           className="flex-1 font-sans text-lg text-primary"
           placeholder={placeholder}
           placeholderTextColor={colors.microLabel}
@@ -52,6 +55,7 @@ function MetricField({
 }
 
 export default function BodyMetricsScreen() {
+  const colors = useThemeColors();
   const router = useRouter();
   const draft = useOnboardingStore((s) => s.draft);
   const update = useOnboardingStore((s) => s.update);

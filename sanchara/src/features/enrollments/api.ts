@@ -17,6 +17,8 @@ export interface ProgramMeta {
   type: ProgramType;
   durationDays?: number;
   thumbnailUrl?: string;
+  /** Server-resolved cover URL. Prefer this over `thumbnailUrl`, which is a raw storage key. */
+  thumbnailImageUrl?: string | null;
 }
 
 export interface EnrollmentView {
@@ -47,6 +49,8 @@ export interface TodayExercise {
   difficulty: 'EASY' | 'MEDIUM' | 'HARD';
   durationSeconds: number;
   thumbnailUrl?: string;
+  /** Server-resolved cover URL. Prefer this over `thumbnailUrl`, which is a raw storage key. */
+  thumbnailImageUrl?: string | null;
   videoUrl: string | null;
 }
 
@@ -61,6 +65,15 @@ export interface TodayView {
   title?: string;
   isRestDay: boolean;
   hasContent: boolean;
+  /**
+   * True when a day was already completed today. One program day per calendar
+   * day — the pointer has moved on, but this day can't be started until the
+   * date does too. The server rejects a start either way; this just lets the
+   * UI say so before the patient taps.
+   */
+  locked: boolean;
+  /** Clinic-local date (YYYY-MM-DD) this unlocks. Set only when locked. */
+  unlocksOn?: string;
   exercises: TodayExercise[];
 }
 
@@ -126,6 +139,18 @@ export function isActiveEnrollmentConflict(err: unknown): boolean {
   return e?.response?.status === 409 && e.response?.data?.details?.reason === 'active_enrollment_exists';
 }
 
+/**
+ * True when the backend rejects because the patient already did a day today
+ * (one program day per calendar day). Returns the unlock date when it does, so
+ * the UI can say exactly when to come back rather than just failing.
+ */
+export function dayAlreadyCompleted(err: unknown): { unlocksOn?: string } | null {
+  const e = err as AxiosError<{ details?: { reason?: string; unlocksOn?: string } }>;
+  if (e?.response?.status !== 409) return null;
+  if (e.response?.data?.details?.reason !== 'day_already_completed') return null;
+  return { unlocksOn: e.response.data.details.unlocksOn };
+}
+
 export function useEnroll() {
   const qc = useQueryClient();
   return useMutation({
@@ -137,8 +162,19 @@ export function useEnroll() {
       );
       return data.enrollment;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['enrollment', 'me'] });
+    onSuccess: (enrollment) => {
+      // Seed the cache SYNCHRONOUSLY with the enrollment we just created.
+      //
+      // The caller navigates straight into /(app), whose layout gates on this
+      // exact query. Invalidation alone is not enough: it only marks the entry
+      // stale, so the gate would still read the cached `null` from before the
+      // user enrolled and bounce them right back to program selection — the
+      // "first tap does nothing, second tap works" bug. POST /enrollments and
+      // GET /enrollments/me both return the same EnrollmentView, so this value
+      // is exactly what a refetch would produce.
+      qc.setQueryData(['enrollment', 'me'], enrollment);
+      // Prefix invalidation so today's workout is re-derived for the new program.
+      qc.invalidateQueries({ queryKey: ['enrollment'] });
     },
   });
 }

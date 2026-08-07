@@ -7,7 +7,7 @@ import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import { Pressable, Text, View } from 'react-native';
 
-import { colors } from '@/theme/tokens';
+import { useThemeColors } from '@/theme/useTheme';
 
 interface SpecialistCardProps {
   name: string;
@@ -17,6 +17,7 @@ interface SpecialistCardProps {
 }
 
 export function SpecialistCard({ name, title, avatarUrl, onBook }: SpecialistCardProps) {
+  const colors = useThemeColors();
   return (
     <View className="flex-row items-center rounded-card border border-border bg-surface p-4">
       <Image

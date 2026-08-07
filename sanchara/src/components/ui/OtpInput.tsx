@@ -7,6 +7,8 @@ import * as Haptics from 'expo-haptics';
 import { useRef } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 
+import { useResolvedTheme } from '@/theme/useTheme';
+
 interface OtpInputProps {
   value: string;
   onChange: (next: string) => void;
@@ -15,6 +17,7 @@ interface OtpInputProps {
 }
 
 export function OtpInput({ value, onChange, length = 6, autoFocus = true }: OtpInputProps) {
+  const theme = useResolvedTheme();
   const inputRef = useRef<TextInput>(null);
   const cells = Array.from({ length });
 
@@ -37,6 +40,7 @@ export function OtpInput({ value, onChange, length = 6, autoFocus = true }: OtpI
         })}
       </View>
       <TextInput
+        keyboardAppearance={theme}
         ref={inputRef}
         autoFocus={autoFocus}
         value={value}

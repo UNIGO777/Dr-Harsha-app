@@ -17,7 +17,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { colors } from '@/theme/tokens';
+import { withAlpha } from '@/theme/tokens';
+import { useThemeColors } from '@/theme/useTheme';
 
 interface StickyHeaderProps {
   scrollY: SharedValue<number>;
@@ -35,6 +36,7 @@ export function StickyHeader({
   onPressWallet,
   onPressProfile,
 }: StickyHeaderProps) {
+  const colors = useThemeColors();
   const insets = useSafeAreaInsets();
 
   const animatedStyle = useAnimatedStyle(() => {
@@ -76,12 +78,12 @@ export function StickyHeader({
       ]}
     >
       {/* Near-opaque rather than a blur: keeps the app free of an extra native
-          module (expo-blur), and on this near-black canvas the difference is
-          imperceptible. */}
+          module (expo-blur), and against the page canvas the difference is
+          imperceptible in either theme. */}
       <View
         className="flex-row items-center justify-between px-5 py-3"
         style={{
-          backgroundColor: 'rgba(11,11,12,0.96)',
+          backgroundColor: withAlpha(colors.base, 0.96),
           borderBottomWidth: 1,
           borderBottomColor: colors.border,
         }}

@@ -2,6 +2,17 @@
 // reachable). Plain stack: list -> detail.
 import { Stack } from 'expo-router';
 
+import { useThemeColors } from '@/theme/useTheme';
+
 export default function ProgramsLayout() {
-  return <Stack screenOptions={{ headerShown: false }} />;
+  const colors = useThemeColors();
+
+  return (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: colors.base },
+      }}
+    />
+  );
 }

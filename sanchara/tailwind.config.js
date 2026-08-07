@@ -1,27 +1,33 @@
 /** @type {import('tailwindcss').Config} */
-// Sanchara — dark-mode-only design system.
-// Values here MIRROR src/theme/tokens.ts. Because the app is dark-only, the dark
-// values ARE the defaults (there is no light variant), so `bg-base`, `text-primary`,
-// `bg-accent`, etc. resolve to the cinematic dark palette everywhere.
+// Sanchara — light + dark design system.
+//
+// Colours resolve through CSS variables. global.css holds the pre-mount
+// defaults; the live values come from `vars()` on the root View in
+// app/_layout.tsx (see src/theme/useTheme.ts). Either way classes like
+// `bg-base` / `text-primary` flip on their own — no `dark:` prefixes anywhere.
+//
+// Channels are space-separated RGB so `<alpha-value>` works — that's what makes
+// `bg-accent/12` and `border-accent/30` render correctly.
 module.exports = {
+  darkMode: 'class',
   content: ['./app/**/*.{js,jsx,ts,tsx}', './src/**/*.{js,jsx,ts,tsx}'],
   presets: [require('nativewind/preset')],
   theme: {
     extend: {
       colors: {
-        base: '#0B0B0C',
-        surface: '#161618',
-        'input-fill': '#1C1C1F',
-        border: '#26262A',
-        primary: '#FFFFFF', // text-primary
-        secondary: '#B8B8BE', // text-secondary
-        micro: '#9A9AA0', // micro labels
-        accent: '#4FE0AC',
-        'accent-hi': '#7BF0C8',
-        'accent-text': '#0B0B0C',
-        amber: '#F5C46B',
-        peri: '#8B9BF0',
-        danger: '#E5675F',
+        base: 'rgb(var(--color-base) / <alpha-value>)',
+        surface: 'rgb(var(--color-surface) / <alpha-value>)',
+        'input-fill': 'rgb(var(--color-input-fill) / <alpha-value>)',
+        border: 'rgb(var(--color-border) / <alpha-value>)',
+        primary: 'rgb(var(--color-primary) / <alpha-value>)', // text-primary
+        secondary: 'rgb(var(--color-secondary) / <alpha-value>)', // text-secondary
+        micro: 'rgb(var(--color-micro) / <alpha-value>)', // micro labels
+        accent: 'rgb(var(--color-accent) / <alpha-value>)',
+        'accent-hi': 'rgb(var(--color-accent-hi) / <alpha-value>)',
+        'accent-text': 'rgb(var(--color-accent-text) / <alpha-value>)',
+        amber: 'rgb(var(--color-amber) / <alpha-value>)',
+        peri: 'rgb(var(--color-peri) / <alpha-value>)',
+        danger: 'rgb(var(--color-danger) / <alpha-value>)',
       },
       fontFamily: {
         // display serif (Fraunces)

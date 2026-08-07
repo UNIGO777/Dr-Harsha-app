@@ -10,6 +10,7 @@ import type {
   CreateExerciseInput,
   UpdateExerciseInput,
   RejectExerciseInput,
+  StaffListExercisesQuery,
 } from './exercise.validation';
 
 /**
@@ -111,7 +112,11 @@ export async function updateExercise(
 ): Promise<void> {
   try {
     const input = req.body as UpdateExerciseInput;
-    const exercise = await exerciseService.updateExercise((req.params.id as string), input);
+    const exercise = await exerciseService.updateExercise(
+      req.params.id as string,
+      input,
+      req.user
+    );
     res.json({ success: true, exercise });
   } catch (err) {
     next(err);
@@ -148,6 +153,22 @@ export async function rejectExercise(
       rejectionReason
     );
     res.json({ success: true, exercise });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** GET /api/exercises/admin — the portal's full library (all statuses). */
+export async function listForStaff(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const result = await exerciseService.listExercisesForStaff(
+      req.query as unknown as StaffListExercisesQuery
+    );
+    res.json({ success: true, ...result });
   } catch (err) {
     next(err);
   }

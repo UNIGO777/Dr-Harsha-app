@@ -10,7 +10,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Play } from 'lucide-react-native';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
-import { colors } from '@/theme/tokens';
+import { onImage } from '@/theme/tokens';
+import { useThemeColors } from '@/theme/useTheme';
 
 interface SessionCardProps {
   title: string;
@@ -34,6 +35,7 @@ export function SessionCard({
   busy = false,
   onStart,
 }: SessionCardProps) {
+  const colors = useThemeColors();
   return (
     <View className="overflow-hidden rounded-card border border-border bg-surface">
       <View className="h-52 w-full">
@@ -43,9 +45,10 @@ export function SessionCard({
           contentFit="cover"
           transition={400}
         />
-        {/* Scrim: keeps text readable and carries the design if the photo 404s. */}
+        {/* Scrim: keeps text readable and carries the design if the photo 404s.
+            Stays dark in BOTH themes — see `onImage` in the tokens. */}
         <LinearGradient
-          colors={['rgba(11,11,12,0.15)', 'rgba(11,11,12,0.55)', 'rgba(11,11,12,0.96)']}
+          colors={[onImage.scrimTop, onImage.scrimMid, onImage.scrimBottom]}
           locations={[0, 0.45, 1]}
           style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
         />
@@ -56,11 +59,11 @@ export function SessionCard({
               <View
                 key={tag}
                 className="rounded-pill px-2.5 py-1"
-                style={{ backgroundColor: 'rgba(11,11,12,0.55)' }}
+                style={{ backgroundColor: onImage.chipFill }}
               >
                 <Text
                   className="font-sans-semibold text-[10px]"
-                  style={{ color: colors.accent, letterSpacing: 1 }}
+                  style={{ color: onImage.accent, letterSpacing: 1 }}
                 >
                   {tag}
                 </Text>
@@ -69,15 +72,17 @@ export function SessionCard({
           </View>
           <Text
             className="font-sans-semibold text-[11px]"
-            style={{ color: colors.textSecondary, letterSpacing: 1 }}
+            style={{ color: onImage.textSecondary, letterSpacing: 1 }}
           >
             {minutes} MIN
           </Text>
         </View>
 
         <View className="absolute bottom-4 left-4 right-4">
-          <Text className="font-display-bold text-2xl text-primary">{title}</Text>
-          <Text className="mt-0.5 font-sans text-sm text-secondary">
+          <Text className="font-display-bold text-2xl" style={{ color: onImage.textPrimary }}>
+            {title}
+          </Text>
+          <Text className="mt-0.5 font-sans text-sm" style={{ color: onImage.textSecondary }}>
             {exerciseCount} exercises
           </Text>
         </View>

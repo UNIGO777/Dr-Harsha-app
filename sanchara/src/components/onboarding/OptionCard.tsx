@@ -7,7 +7,7 @@ import * as Haptics from 'expo-haptics';
 import type { LucideIcon } from 'lucide-react-native';
 import { Pressable, Text, View } from 'react-native';
 
-import { colors } from '@/theme/tokens';
+import { useThemeColors } from '@/theme/useTheme';
 
 interface OptionCardProps {
   title: string;
@@ -26,6 +26,7 @@ export function OptionCard({
   onPress,
   showRadio = false,
 }: OptionCardProps) {
+  const colors = useThemeColors();
   return (
     <Pressable
       accessibilityRole="button"

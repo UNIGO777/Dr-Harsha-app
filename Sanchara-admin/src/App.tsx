@@ -1,12 +1,20 @@
 import { useEffect } from 'react';
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 
+import { queryClient } from '@/api/queryClient';
 import { AppShell } from '@/components/AppShell';
 import { useAuthStore } from '@/features/auth/useAuthStore';
 import { LoginPage } from '@/routes/LoginPage';
 import { OverviewPage } from '@/routes/OverviewPage';
 import { PlaceholderPage } from '@/routes/PlaceholderPage';
+import { ProgramDetailPage } from '@/routes/ProgramDetailPage';
+import { ProgramsPage } from '@/routes/ProgramsPage';
+import { PatientsPage } from '@/routes/PatientsPage';
+import { PatientDetailPage } from '@/routes/PatientDetailPage';
+import { ExercisesPage } from '@/routes/ExercisesPage';
+import { ApprovalsPage } from '@/routes/ApprovalsPage';
 
 /**
  * Gate for authenticated routes. While the persisted session is being verified
@@ -48,55 +56,22 @@ export default function App() {
   }, [restore]);
 
   return (
-    <BrowserRouter>
-      <Routes>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <Routes>
         <Route path="/login" element={<LoginRoute />} />
 
         <Route element={<RequireAuth />}>
           <Route element={<AppShell />}>
             <Route index element={<OverviewPage />} />
-            <Route
-              path="patients"
-              element={
-                <PlaceholderPage
-                  title="Patients"
-                  subtitle="Search patients, review sessions and pain trends, assign programs."
-                  backend="Needs a staff patients API — not built yet"
-                />
-              }
-            />
-            <Route
-              path="programs"
-              element={
-                <PlaceholderPage
-                  title="Programs"
-                  subtitle="Build programs, levels and daily workouts."
-                  backend="Backend ready: /api/programs (+ /levels, /days)"
-                />
-              }
-            />
-            <Route
-              path="exercises"
-              element={
-                <PlaceholderPage
-                  title="Exercises"
-                  subtitle="Upload videos, edit metadata and manage the library."
-                  backend="Backend ready: /api/exercises (+ /upload-video)"
-                />
-              }
-            />
+            <Route path="patients" element={<PatientsPage />} />
+            <Route path="patients/:id" element={<PatientDetailPage />} />
+            <Route path="programs" element={<ProgramsPage />} />
+            <Route path="programs/:id" element={<ProgramDetailPage />} />
+            <Route path="exercises" element={<ExercisesPage />} />
 
             <Route element={<RequireAdmin />}>
-              <Route
-                path="approvals"
-                element={
-                  <PlaceholderPage
-                    title="Approvals"
-                    subtitle="Review clinician-uploaded videos before they reach patients."
-                    backend="Backend ready: /api/exercises/admin/pending"
-                  />
-                }
-              />
+              <Route path="approvals" element={<ApprovalsPage />} />
               <Route
                 path="audit"
                 element={
@@ -111,8 +86,9 @@ export default function App() {
           </Route>
         </Route>
 
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </QueryClientProvider>
   );
 }

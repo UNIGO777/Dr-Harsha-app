@@ -12,26 +12,32 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ProgramCard } from '@/components/programs/ProgramCard';
 import { ProgramsHeader } from '@/components/programs/ProgramsHeader';
 import { Chip } from '@/components/ui';
+import { resolveThumbnail } from '@/lib/media';
 import {
   useProgramsInfinite,
   useRecommendedPrograms,
   type ProgramSummary,
   type Recommendation,
 } from '@/features/programs/api';
-import { colors } from '@/theme/tokens';
+import { withAlpha } from '@/theme/tokens';
+import { useThemeColors } from '@/theme/useTheme';
 
 function RecommendedHero({ rec, onPress }: { rec: Recommendation; onPress: () => void }) {
+  const colors = useThemeColors();
   const { program } = rec;
+  const cover = resolveThumbnail(program);
   return (
     <Pressable
       onPress={onPress}
       className="overflow-hidden rounded-card border border-border bg-surface active:opacity-90"
     >
-      {program.thumbnailUrl ? (
-        <Image source={program.thumbnailUrl} style={{ position: 'absolute', inset: 0 }} contentFit="cover" />
+      {cover ? (
+        <Image source={cover} style={{ position: 'absolute', inset: 0 }} contentFit="cover" />
       ) : null}
+      {/* Fades the photo into the PAGE colour, so the same overlay reads
+          correctly whether the canvas behind it is near-black or off-white. */}
       <LinearGradient
-        colors={['rgba(105,209,192,0.10)', 'transparent', 'rgba(11,11,12,0.65)']}
+        colors={[withAlpha(colors.accent, 0.1), 'transparent', withAlpha(colors.base, 0.65)]}
         style={{ position: 'absolute', inset: 0 }}
       />
       <View className="p-5">
@@ -54,6 +60,7 @@ function RecommendedHero({ rec, onPress }: { rec: Recommendation; onPress: () =>
 }
 
 export default function ProgramSelectScreen() {
+  const colors = useThemeColors();
   const router = useRouter();
   const recommended = useRecommendedPrograms();
   const list = useProgramsInfinite(12);

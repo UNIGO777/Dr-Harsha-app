@@ -40,6 +40,13 @@ const envSchema = z.object({
   UPLOAD_DIR: z.string().min(1).default('./uploads'),
   MAX_VIDEO_SIZE_MB: z.coerce.number().int().positive().default(100),
 
+  /**
+   * IANA zone the clinic's "day" is measured in — the boundary for the
+   * one-session-per-day rule. Server UTC would roll over at 05:30 IST, midway
+   * through a patient's morning, so this must be the clinic's own zone.
+   */
+  CLINIC_TIMEZONE: z.string().min(1).default('Asia/Kolkata'),
+
   // Payments (Razorpay) — optional/mocked in local phase
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),

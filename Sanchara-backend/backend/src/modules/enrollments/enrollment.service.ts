@@ -1,7 +1,7 @@
 import { Types, type HydratedDocument } from 'mongoose';
 import { Enrollment, type IEnrollment } from '../../models/enrollment.model';
 import { ApiError } from '../../utils/ApiError';
-import { getPlayableVideoUrl } from '../../services/video.service';
+import { getImageUrl, getPlayableVideoUrl } from '../../services/video.service';
 import { getExercisesByIds } from '../exercises/exercise.service';
 import {
   getProgramMeta,
@@ -10,6 +10,7 @@ import {
   type ProgramMeta,
 } from '../programs/program.service';
 import type { EnrollmentStatus, Difficulty } from '../../constants/enums';
+import { clinicDateString, nextClinicDate } from '../../utils/clinicDate';
 
 /**
  * Enrollments service (M2.5-L). Owns the Enrollment model. Progress is now
@@ -132,6 +133,18 @@ export async function getMyEnrollment(userId: string): Promise<EnrollmentView | 
   return active ? toView(active) : null;
 }
 
+/**
+ * A patient's current enrollment, for the clinical portal. Falls back to their
+ * most recent enrollment when none is active, so staff can still see what the
+ * patient was last doing (paused, abandoned or completed).
+ */
+export async function getEnrollmentForStaff(userId: string): Promise<EnrollmentView | null> {
+  const active = await findActive(userId);
+  if (active) return toView(active);
+  const latest = await Enrollment.findOne({ user: userId }).sort({ updatedAt: -1 });
+  return latest ? toView(latest) : null;
+}
+
 export interface TodayExercise {
   exerciseId: string;
   order: number;
@@ -141,6 +154,8 @@ export interface TodayExercise {
   difficulty: Difficulty;
   durationSeconds: number;
   thumbnailUrl?: string;
+  /** `thumbnailUrl` resolved to something a client can actually load. */
+  thumbnailImageUrl: string | null;
   videoUrl: string | null;
 }
 
@@ -154,6 +169,13 @@ export interface TodayView {
   title?: string;
   isRestDay: boolean;
   hasContent: boolean;
+  /**
+   * True when a day was already completed TODAY. The pointer has moved on, but
+   * this day may not be started until the calendar does too.
+   */
+  locked: boolean;
+  /** Clinic-local date (YYYY-MM-DD) this day unlocks. Set only when locked. */
+  unlocksOn?: string;
   exercises: TodayExercise[];
 }
 
@@ -169,6 +191,10 @@ export async function getToday(userId: string): Promise<TodayView> {
   const active = await findActive(userId);
   if (!active) throw ApiError.badRequest('You have no active enrollment');
 
+  const today = clinicDateString();
+  const locked = active.lastCompletedOn === today;
+  const unlocksOn = locked ? nextClinicDate(active.lastCompletedOn!) : undefined;
+
   const content = await resolveTodayContent(active);
   if (!content) {
     // No template authored for this level/day yet — return gracefully.
@@ -180,6 +206,8 @@ export async function getToday(userId: string): Promise<TodayView> {
       dayNumber: active.currentDay,
       isRestDay: false,
       hasContent: false,
+      locked,
+      unlocksOn,
       exercises: [],
     };
   }
@@ -193,6 +221,8 @@ export async function getToday(userId: string): Promise<TodayView> {
     dayNumber: content.dayNumber,
     title: content.title,
     hasContent: true,
+    locked,
+    unlocksOn,
   };
 
   if (content.isRestDay) {
@@ -214,6 +244,7 @@ export async function getToday(userId: string): Promise<TodayView> {
         difficulty: v.difficulty,
         durationSeconds: v.durationSeconds,
         thumbnailUrl: v.thumbnailUrl,
+        thumbnailImageUrl: getImageUrl(v.thumbnailUrl),
         // Entitled: requireActiveAccess passed. Never raw storageKey.
         videoUrl: getPlayableVideoUrl(v.storageKey, true),
       };
@@ -262,6 +293,8 @@ export interface AdvanceResult {
   levelAdvanced?: boolean;
   /** True when this completion finished the whole program. */
   programCompleted?: boolean;
+  /** Clinic-local date (YYYY-MM-DD) the next day becomes available. */
+  nextUnlocksOn?: string;
 }
 
 export interface AdvanceOpts {
@@ -338,6 +371,11 @@ export async function advanceForCompletedDay(
     }
   }
 
+  // Stamp the clinic-local day this was finished on. The pointer moves to the
+  // next day immediately (so the patient sees their progress), but that day
+  // stays LOCKED until the calendar rolls over — see `isLockedForToday`.
+  enrollment.lastCompletedOn = clinicDateString();
+
   await enrollment.save();
   return {
     advanced: true,
@@ -348,6 +386,29 @@ export async function advanceForCompletedDay(
     completedLevels: enrollment.completedLevels,
     levelAdvanced,
     programCompleted,
+    nextUnlocksOn: nextClinicDate(enrollment.lastCompletedOn),
+  };
+}
+
+/**
+ * One program day per calendar day.
+ *
+ * Returns the lock state for a user's ACTIVE enrollment. Exported so the
+ * sessions module can enforce it at /sessions/start without reaching into the
+ * Enrollment model directly.
+ */
+export async function getDailyLock(userId: string): Promise<{
+  locked: boolean;
+  lastCompletedOn?: string;
+  nextUnlocksOn?: string;
+}> {
+  const active = await findActive(userId);
+  if (!active?.lastCompletedOn) return { locked: false };
+
+  return {
+    locked: active.lastCompletedOn === clinicDateString(),
+    lastCompletedOn: active.lastCompletedOn,
+    nextUnlocksOn: nextClinicDate(active.lastCompletedOn),
   };
 }
 
@@ -358,6 +419,17 @@ export async function advanceForCompletedDay(
 export async function completeRestDay(userId: string): Promise<AdvanceResult> {
   const active = await findActive(userId);
   if (!active) throw ApiError.badRequest('You have no active enrollment');
+
+  // Same one-per-day rule as a workout: ticking off a rest day advances the
+  // enrollment, so without this a patient could clear several days at once.
+  if (active.lastCompletedOn === clinicDateString()) {
+    throw new ApiError(409, 'You have already completed a day today', {
+      details: {
+        reason: 'day_already_completed',
+        unlocksOn: nextClinicDate(active.lastCompletedOn),
+      },
+    });
+  }
 
   const content = await resolveTodayContent(active);
   if (!content) throw ApiError.badRequest('No content for the current day');

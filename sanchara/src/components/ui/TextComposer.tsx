@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { colors } from '@/theme/tokens';
+import { useResolvedTheme, useThemeColors } from '@/theme/useTheme';
 
 interface TextComposerProps {
   visible: boolean;
@@ -30,6 +30,8 @@ export function TextComposer({
   maxLength = 2000,
   onDone,
 }: TextComposerProps) {
+  const colors = useThemeColors();
+  const theme = useResolvedTheme();
   const [text, setText] = useState(initialValue);
   const inputRef = useRef<TextInput>(null);
 
@@ -67,6 +69,7 @@ export function TextComposer({
 
             {/* Text area */}
             <TextInput
+              keyboardAppearance={theme}
               ref={inputRef}
               className="flex-1 px-5 pt-4 font-sans text-lg leading-7 text-primary"
               placeholder={placeholder}

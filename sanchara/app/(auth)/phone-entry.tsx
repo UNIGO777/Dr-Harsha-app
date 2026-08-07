@@ -9,7 +9,7 @@ import { BrandFooter } from '@/components/BrandFooter';
 import { Button } from '@/components/ui';
 import { useRequestOtp } from '@/features/auth/api';
 import { BRAND, LEGAL_LINKS } from '@/lib/brand';
-import { colors } from '@/theme/tokens';
+import { useResolvedTheme, useThemeColors } from '@/theme/useTheme';
 
 /** "9876543210" -> "98765 43210" for display. */
 function groupPhone(digits: string): string {
@@ -24,6 +24,8 @@ function extractApiError(e: unknown, fallback: string): string {
 }
 
 export default function PhoneEntryScreen() {
+  const colors = useThemeColors();
+  const theme = useResolvedTheme();
   const router = useRouter();
   const requestOtp = useRequestOtp();
   const [digits, setDigits] = useState('');
@@ -86,6 +88,7 @@ export default function PhoneEntryScreen() {
               </Text>
               <View className="mx-3 h-6 w-px bg-border" />
               <TextInput
+                keyboardAppearance={theme}
                 className="flex-1 font-sans text-base text-primary"
                 placeholder="98765 43210"
                 placeholderTextColor={colors.microLabel}

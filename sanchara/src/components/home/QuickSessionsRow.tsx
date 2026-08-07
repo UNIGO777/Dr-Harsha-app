@@ -12,15 +12,19 @@ import { Flower2, PersonStanding, Wind } from 'lucide-react-native';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import type { ProgramSummary } from '@/features/programs/api';
-import { colors } from '@/theme/tokens';
+import { withAlpha, type Palette } from '@/theme/tokens';
+import { useThemeColors } from '@/theme/useTheme';
 
 const ICONS = [Wind, PersonStanding, Flower2] as const;
 
-const TINTS = [
-  { fg: colors.peri, bg: 'rgba(139,155,240,0.14)' },
-  { fg: colors.amber, bg: 'rgba(245,196,107,0.14)' },
-  { fg: colors.accent, bg: 'rgba(79,224,172,0.14)' },
-] as const;
+// Tints are derived from the ACTIVE palette (not baked rgba), so the chips stay
+// legible when the accent darkens in light mode.
+const tintsFor = (c: Palette) =>
+  [
+    { fg: c.peri, bg: withAlpha(c.peri, 0.14) },
+    { fg: c.amber, bg: withAlpha(c.amber, 0.14) },
+    { fg: c.accent, bg: withAlpha(c.accent, 0.14) },
+  ] as const;
 
 export function QuickSessionsRow({
   programs,
@@ -29,6 +33,9 @@ export function QuickSessionsRow({
   programs: ProgramSummary[];
   onSelect: (id: string) => void;
 }) {
+  const colors = useThemeColors();
+  const tints = tintsFor(colors);
+
   return (
     <ScrollView
       horizontal
@@ -37,7 +44,7 @@ export function QuickSessionsRow({
     >
       {programs.map((program, index) => {
         const Icon = ICONS[index % ICONS.length]!;
-        const tint = TINTS[index % TINTS.length]!;
+        const tint = tints[index % tints.length]!;
         const area = program.targetAreas[0]?.replace(/_/g, ' ');
 
         return (

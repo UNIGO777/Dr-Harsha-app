@@ -10,9 +10,11 @@ import { Check, Lock } from 'lucide-react-native';
 import { ScrollView, Text, View } from 'react-native';
 
 import type { HomeLevel } from '@/features/home/useHomeData';
-import { colors } from '@/theme/tokens';
+import { withAlpha } from '@/theme/tokens';
+import { useThemeColors } from '@/theme/useTheme';
 
 function DayDots({ level }: { level: HomeLevel }) {
+  const colors = useThemeColors();
   if (level.status === 'locked') return null;
 
   const dots =
@@ -50,6 +52,7 @@ function DayDots({ level }: { level: HomeLevel }) {
 }
 
 export function JourneyRow({ levels }: { levels: HomeLevel[] }) {
+  const colors = useThemeColors();
   return (
     <ScrollView
       horizontal
@@ -70,7 +73,7 @@ export function JourneyRow({ levels }: { levels: HomeLevel[] }) {
             }
             className="w-[168px] rounded-card p-4"
             style={{
-              backgroundColor: isCurrent ? colors.surface : 'rgba(22,22,24,0.6)',
+              backgroundColor: isCurrent ? colors.surface : withAlpha(colors.surface, 0.6),
               borderWidth: 1,
               borderStyle: isLocked ? 'dashed' : 'solid',
               borderColor: isCurrent ? colors.accent : colors.border,
@@ -90,7 +93,7 @@ export function JourneyRow({ levels }: { levels: HomeLevel[] }) {
               {level.status === 'completed' ? (
                 <View
                   className="h-5 w-5 items-center justify-center rounded-pill"
-                  style={{ backgroundColor: 'rgba(79,224,172,0.16)' }}
+                  style={{ backgroundColor: withAlpha(colors.accent, 0.16) }}
                 >
                   <Check size={12} color={colors.accent} strokeWidth={3} />
                 </View>

@@ -18,8 +18,13 @@ import { ApiError } from '../utils/ApiError';
 const VIDEO_SUBDIR = 'videos';
 const THUMB_SUBDIR = 'thumbnails';
 
+/** Only the `video` field is a video; every other accepted field is imagery. */
 function subdirFor(fieldname: string): string {
-  return fieldname === 'thumbnail' ? THUMB_SUBDIR : VIDEO_SUBDIR;
+  return fieldname === 'video' ? VIDEO_SUBDIR : THUMB_SUBDIR;
+}
+
+function isImageField(fieldname: string): boolean {
+  return fieldname !== 'video';
 }
 
 function ensureDir(dir: string): void {
@@ -34,10 +39,9 @@ const storage = multer.diskStorage({
   },
   filename: (_req, file, cb) => {
     // Safe, unique, collision-free names — never trust the client filename.
-    const ext =
-      file.fieldname === 'thumbnail'
-        ? path.extname(file.originalname).toLowerCase() || '.jpg'
-        : '.mp4';
+    const ext = isImageField(file.fieldname)
+      ? path.extname(file.originalname).toLowerCase() || '.jpg'
+      : '.mp4';
     cb(null, `${randomUUID()}${ext}`);
   },
 });
@@ -92,4 +96,38 @@ export function uploadExerciseMedia(req: Request, res: Response, next: NextFunct
 /** Storage KEY (not a public URL) to persist in Exercise.videoUrl / thumbnailUrl. */
 export function toStorageKey(file: Express.Multer.File): string {
   return `uploads/${subdirFor(file.fieldname)}/${file.filename}`;
+}
+
+const MAX_IMAGE_MB = 5;
+
+/**
+ * Single-image upload (multipart field "image") for program covers and any
+ * other artwork. Separate from the exercise media handler, which requires a
+ * video — reusing that here would reject an image-only request.
+ */
+const runImageMulter = multer({
+  storage,
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true);
+    else cb(new ApiError(400, 'Only image files are accepted (multipart field "image")'));
+  },
+  limits: { fileSize: MAX_IMAGE_MB * 1024 * 1024 },
+}).single('image');
+
+export function uploadImage(req: Request, res: Response, next: NextFunction): void {
+  runImageMulter(req, res, (err: unknown) => {
+    if (!err) {
+      next();
+      return;
+    }
+    if (err instanceof multer.MulterError) {
+      const message =
+        err.code === 'LIMIT_FILE_SIZE'
+          ? `Image exceeds the ${MAX_IMAGE_MB}MB limit`
+          : err.message;
+      next(new ApiError(400, message));
+      return;
+    }
+    next(err instanceof ApiError ? err : new ApiError(400, (err as Error).message));
+  });
 }

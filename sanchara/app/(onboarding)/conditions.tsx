@@ -8,7 +8,7 @@ import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
 import { Chip, TextComposer } from '@/components/ui';
 import { STEP } from '@/features/onboarding/steps';
 import { useOnboardingStore } from '@/store/onboardingStore';
-import { colors } from '@/theme/tokens';
+import { useThemeColors } from '@/theme/useTheme';
 
 const COMMON_CONDITIONS = [
   'Diabetes',
@@ -24,6 +24,7 @@ const COMMON_CONDITIONS = [
 ];
 
 export default function ConditionsScreen() {
+  const colors = useThemeColors();
   const router = useRouter();
   const draft = useOnboardingStore((s) => s.draft);
   const update = useOnboardingStore((s) => s.update);

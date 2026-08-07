@@ -11,13 +11,14 @@ import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
 import { Input } from '@/components/ui';
 import { STEP } from '@/features/onboarding/steps';
 import { useOnboardingStore } from '@/store/onboardingStore';
-import { colors } from '@/theme/tokens';
+import { useThemeColors } from '@/theme/useTheme';
 
 const LABEL_TO_ID: Record<string, string> = Object.fromEntries(
   Object.entries(REGION_LABELS).map(([id, label]) => [label, id]),
 );
 
 export default function PainAreasScreen() {
+  const colors = useThemeColors();
   const router = useRouter();
   const draft = useOnboardingStore((s) => s.draft);
   const update = useOnboardingStore((s) => s.update);

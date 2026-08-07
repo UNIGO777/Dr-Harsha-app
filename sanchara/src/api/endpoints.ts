@@ -41,5 +41,12 @@ export const endpoints = {
     history: '/sessions/history',
     calendar: '/sessions/calendar',
     trends: '/sessions/trends',
+    byId: (id: string) => `/sessions/${id}`,
+    /** Drives the server-side state machine (WARMUP → EXERCISE_ACTIVE → …). */
+    state: (id: string) => `/sessions/${id}/state`,
+    exerciseComplete: (id: string, exerciseId: string) =>
+      `/sessions/${id}/exercise/${exerciseId}/complete`,
+    complete: (id: string) => `/sessions/${id}/complete`,
+    abandon: (id: string) => `/sessions/${id}/abandon`,
   },
 } as const;

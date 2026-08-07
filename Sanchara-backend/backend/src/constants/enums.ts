@@ -122,6 +122,8 @@ export const AUDIT_ACTIONS = [
   'SAFETY_OVERRIDE',
   'CHATBOT_FLAGGED',
   'SUBSCRIPTION_OVERRIDE',
+  /** Staff blocked/unblocked a patient, or approved one off the waitlist. */
+  'ACCOUNT_STATUS_CHANGED',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -132,4 +134,6 @@ export const AUDIT_ACTIONS_REQUIRING_REASON = [
   'PLAYLIST_LOCKED',
   'SUBSCRIPTION_OVERRIDE',
   'VIDEO_REJECTED',
+  // Blocking cuts a patient off from prescribed exercise — always justify it.
+  'ACCOUNT_STATUS_CHANGED',
 ] as const;

@@ -102,6 +102,15 @@ export const programIdParamSchema = z.object({ id: objectId });
 export const programDayParamSchema = z.object({ id: objectId, dayId: objectId });
 export const programLevelParamSchema = z.object({ id: objectId, levelId: objectId });
 
+/** Portal list — includes drafts, so it has its own filters. */
+export const adminListProgramsQuerySchema = z.object({
+  search: z.string().trim().min(1).max(100).optional(),
+  type: z.enum(PROGRAM_TYPES).optional(),
+  isPublished: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+
 export const listProgramsQuerySchema = z.object({
   goalTag: z.string().trim().min(1).optional(),
   targetAreas: z.string().trim().min(1).optional(),
@@ -121,3 +130,4 @@ export type CreateDayInput = z.infer<typeof createDaySchema>;
 export type UpdateDayInput = z.infer<typeof updateDaySchema>;
 export type ListDaysQuery = z.infer<typeof listDaysQuerySchema>;
 export type ListProgramsQuery = z.infer<typeof listProgramsQuerySchema>;
+export type AdminListProgramsQuery = z.infer<typeof adminListProgramsQuerySchema>;

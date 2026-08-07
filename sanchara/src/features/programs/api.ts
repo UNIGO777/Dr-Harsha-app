@@ -18,6 +18,8 @@ export interface ProgramSummary {
   type: ProgramType;
   durationDays?: number;
   thumbnailUrl?: string;
+  /** Server-resolved cover URL. Prefer this over `thumbnailUrl`, which is a raw storage key. */
+  thumbnailImageUrl?: string | null;
   difficultyLevel?: Difficulty;
   goalTag: string[];
   suitableConditions: string[];

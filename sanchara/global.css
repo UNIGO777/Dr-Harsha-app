@@ -1,3 +1,51 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/**
+ * Theme variables consumed by tailwind.config.js.
+ *
+ * Values are space-separated RGB channels (not hex) so Tailwind's
+ * `<alpha-value>` slot works — that's what makes `bg-accent/12` possible.
+ * Keep these in sync with src/theme/tokens.ts.
+ *
+ * THESE ARE ONLY THE PRE-MOUNT DEFAULTS. The live theme is pushed down the tree
+ * by `vars()` on the root View in app/_layout.tsx, whose inline variables
+ * outrank everything here — NativeWind's class-based dark mode cannot be
+ * toggled at runtime on React Native 0.83 (see src/theme/useTheme.ts for why).
+ * `.dark:root` is kept so the class-based path stays correct if that's ever
+ * fixed upstream.
+ */
+@layer base {
+  :root {
+    --color-base: 250 250 248;
+    --color-surface: 255 255 255;
+    --color-input-fill: 242 242 240;
+    --color-primary: 17 18 20;
+    --color-secondary: 84 86 92;
+    --color-micro: 117 119 126;
+    --color-accent: 14 158 116;
+    --color-accent-hi: 11 138 100;
+    --color-accent-text: 255 255 255;
+    --color-amber: 181 118 26;
+    --color-peri: 74 91 192;
+    --color-danger: 196 69 60;
+    --color-border: 228 228 226;
+  }
+
+  .dark:root {
+    --color-base: 11 11 12;
+    --color-surface: 22 22 24;
+    --color-input-fill: 28 28 31;
+    --color-primary: 255 255 255;
+    --color-secondary: 184 184 190;
+    --color-micro: 154 154 160;
+    --color-accent: 79 224 172;
+    --color-accent-hi: 123 240 200;
+    --color-accent-text: 11 11 12;
+    --color-amber: 245 196 107;
+    --color-peri: 139 155 240;
+    --color-danger: 229 103 95;
+    --color-border: 38 38 42;
+  }
+}

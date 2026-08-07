@@ -5,12 +5,13 @@ import { User as UserIcon } from 'lucide-react-native';
 import { Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Button, Card } from '@/components/ui';
+import { Button, Card, ThemePicker } from '@/components/ui';
 import { formatPhoneForDisplay } from '@/lib/formatters';
 import { useAuthStore } from '@/store/authStore';
-import { colors } from '@/theme/tokens';
+import { useThemeColors } from '@/theme/useTheme';
 
 export default function ProfileScreen() {
+  const colors = useThemeColors();
   const router = useRouter();
   const phone = useAuthStore((s) => s.phone);
   const signOut = useAuthStore((s) => s.signOut);
@@ -37,6 +38,13 @@ export default function ProfileScreen() {
           </Text>
         </View>
       </Card>
+
+      <View className="mt-8">
+        <Text className="font-sans text-xs uppercase tracking-[2px] text-micro">Appearance</Text>
+        <View className="mt-3">
+          <ThemePicker />
+        </View>
+      </View>
 
       <View className="mt-auto pb-6">
         <Button label="Log out" variant="secondary" onPress={onLogout} />

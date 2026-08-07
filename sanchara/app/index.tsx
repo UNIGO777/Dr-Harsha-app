@@ -9,9 +9,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui';
 import { useAuthStore } from '@/store/authStore';
-import { colors } from '@/theme/tokens';
+import { withAlpha } from '@/theme/tokens';
+import { useThemeColors } from '@/theme/useTheme';
 
 export default function Index() {
+  const colors = useThemeColors();
   const router = useRouter();
   const status = useAuthStore((s) => s.status);
 
@@ -29,7 +31,7 @@ export default function Index() {
     <View className="flex-1 bg-base">
       {/* Cinematic bottom scrim — the pattern used over full-bleed images later. */}
       <LinearGradient
-        colors={['transparent', 'rgba(105,209,192,0.06)', colors.base]}
+        colors={['transparent', withAlpha(colors.accent, 0.06), colors.base]}
         style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '70%' }}
       />
 

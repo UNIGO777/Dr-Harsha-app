@@ -8,8 +8,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowRight, Dumbbell } from 'lucide-react-native';
 import { Pressable, Text, View } from 'react-native';
 
+import { resolveThumbnail } from '@/lib/media';
 import type { Difficulty, ProgramSummary } from '@/features/programs/api';
-import { colors } from '@/theme/tokens';
+import { onImage, withAlpha } from '@/theme/tokens';
+import { useThemeColors } from '@/theme/useTheme';
 
 const DIFFICULTY_LABEL: Record<Difficulty, string> = {
   EASY: 'Beginner',
@@ -24,6 +26,8 @@ export function ProgramCard({
   program: ProgramSummary;
   onPress: () => void;
 }) {
+  const colors = useThemeColors();
+  const cover = resolveThumbnail(program);
   return (
     <Pressable
       onPress={onPress}
@@ -33,24 +37,34 @@ export function ProgramCard({
           (or missing URL) still shows something clean. */}
       <View className="h-40 w-full">
         <LinearGradient
-          colors={['#1D2A28', '#141416']}
+          colors={[withAlpha(colors.accent, 0.14), colors.inputFill]}
           style={{ position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center' }}
         >
           <Dumbbell color={colors.border} size={40} />
         </LinearGradient>
-        {program.thumbnailUrl ? (
+        {cover ? (
           <Image
-            source={program.thumbnailUrl}
+            source={cover}
             style={{ position: 'absolute', inset: 0 }}
             contentFit="cover"
             transition={200}
           />
         ) : null}
-        {/* Subtle black overlay to darken the photo for the dark theme. */}
-        <View style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.3)' }} />
+        {/* Softens the photo toward the page colour — darkens in dark mode,
+            lightens in light mode, so the card reads calm either way. */}
+        <View
+          style={{ position: 'absolute', inset: 0, backgroundColor: withAlpha(colors.base, 0.3) }}
+        />
         {program.difficultyLevel ? (
-          <View className="absolute left-3 top-3 rounded-pill bg-black/55 px-3 py-1">
-            <Text className="font-sans-semibold text-[11px] uppercase tracking-wide text-accent">
+          // Sits ON the photo, so it keeps the fixed dark chip in both themes.
+          <View
+            className="absolute left-3 top-3 rounded-pill px-3 py-1"
+            style={{ backgroundColor: onImage.chipFill }}
+          >
+            <Text
+              className="font-sans-semibold text-[11px] uppercase tracking-wide"
+              style={{ color: onImage.accent }}
+            >
               {DIFFICULTY_LABEL[program.difficultyLevel]}
             </Text>
           </View>

@@ -9,7 +9,8 @@ import { Check } from 'lucide-react-native';
 import { Text, View } from 'react-native';
 
 import type { DayStatus } from '@/features/home/useHomeData';
-import { colors } from '@/theme/tokens';
+import { withAlpha } from '@/theme/tokens';
+import { useThemeColors } from '@/theme/useTheme';
 
 interface WeekCardProps {
   days: { label: string; date: number; status: DayStatus }[];
@@ -18,6 +19,7 @@ interface WeekCardProps {
 }
 
 export function WeekCard({ days, currentMinutes, targetMinutes }: WeekCardProps) {
+  const colors = useThemeColors();
   return (
     <View className="rounded-card border border-border bg-surface p-5">
       <View className="flex-row items-center justify-between">
@@ -70,7 +72,7 @@ export function WeekCard({ days, currentMinutes, targetMinutes }: WeekCardProps)
                     : {
                         borderWidth: 1,
                         borderColor: colors.border,
-                        backgroundColor: isDone ? 'rgba(79,224,172,0.08)' : 'transparent',
+                        backgroundColor: isDone ? withAlpha(colors.accent, 0.08) : 'transparent',
                       }
                 }
               >

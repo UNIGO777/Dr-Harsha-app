@@ -13,7 +13,7 @@ import { Button } from '@/components/ui';
 import { ONBOARDING_TOTAL_STEPS, STEP } from '@/features/onboarding/steps';
 import { bmiCategory, calculateBmi } from '@/lib/bmi';
 import { useOnboardingStore } from '@/store/onboardingStore';
-import { colors } from '@/theme/tokens';
+import { useThemeColors } from '@/theme/useTheme';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -25,31 +25,36 @@ const STROKE = 16;
 const R = (RING_SIZE - STROKE) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * R;
 
-const COPY: Record<ReturnType<typeof bmiCategory>, { label: string; note: string; color: string }> =
-  {
-    underweight: {
-      label: 'Underweight',
-      note: "We'll focus on gentle, strength-building movement.",
-      color: colors.textSecondary,
-    },
-    normal: {
-      label: 'Healthy',
-      note: "You're in a healthy range — we'll build on a strong foundation.",
-      color: colors.accent,
-    },
-    overweight: {
-      label: 'Overweight',
-      note: "We'll ease in with joint-friendly movement.",
-      color: colors.textSecondary,
-    },
-    obese: {
-      label: 'Obese',
-      note: "We'll start low-impact and progress you safely.",
-      color: colors.danger,
-    },
-  };
+// The tone is stored as a PALETTE KEY rather than a literal colour, so this map
+// can stay at module scope while still resolving per active theme.
+const COPY: Record<
+  ReturnType<typeof bmiCategory>,
+  { label: string; note: string; tone: 'textSecondary' | 'accent' | 'danger' }
+> = {
+  underweight: {
+    label: 'Underweight',
+    note: "We'll focus on gentle, strength-building movement.",
+    tone: 'textSecondary',
+  },
+  normal: {
+    label: 'Healthy',
+    note: "You're in a healthy range — we'll build on a strong foundation.",
+    tone: 'accent',
+  },
+  overweight: {
+    label: 'Overweight',
+    note: "We'll ease in with joint-friendly movement.",
+    tone: 'textSecondary',
+  },
+  obese: {
+    label: 'Obese',
+    note: "We'll start low-impact and progress you safely.",
+    tone: 'danger',
+  },
+};
 
 export default function BmiRevealScreen() {
+  const colors = useThemeColors();
   const router = useRouter();
   const { heightCm, weightKg } = useOnboardingStore((s) => s.draft);
 
@@ -60,6 +65,7 @@ export default function BmiRevealScreen() {
 
   const category = bmi !== null ? bmiCategory(bmi) : 'normal';
   const copy = COPY[category];
+  const copyColor = colors[copy.tone];
   const ringTarget = bmi !== null ? Math.min(Math.max((bmi - BMI_MIN) / (BMI_MAX - BMI_MIN), 0), 1) : 0;
 
   const progress = useSharedValue(0);
@@ -134,7 +140,7 @@ export default function BmiRevealScreen() {
                 cx={RING_SIZE / 2}
                 cy={RING_SIZE / 2}
                 r={R}
-                stroke={copy.color}
+                stroke={copyColor}
                 strokeWidth={STROKE}
                 strokeLinecap="round"
                 fill="none"
@@ -150,7 +156,7 @@ export default function BmiRevealScreen() {
           </View>
 
           <Text
-            style={{ color: copy.color }}
+            style={{ color: copyColor }}
             className="mt-8 font-sans-semibold text-sm uppercase tracking-[2px]"
           >
             {copy.label}

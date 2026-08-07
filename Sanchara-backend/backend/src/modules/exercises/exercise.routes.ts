@@ -8,6 +8,7 @@ import { uploadExerciseMedia } from '../../services/upload.service';
 import * as ctrl from './exercise.controller';
 import {
   listExercisesQuerySchema,
+  staffListExercisesQuerySchema,
   exerciseIdParamSchema,
   alternativesQuerySchema,
   createExerciseSchema,
@@ -37,8 +38,17 @@ router.get(
 
 router.get('/categories', ctrl.getCategories);
 
-// ── Admin: approval queue (before /:id) ───────────────────────────────────────
+// ── Staff/Admin reads (before /:id) ───────────────────────────────────────────
+// The public browse above hides pending/rejected/clinical-exclusive items and
+// strips videoUrl for non-entitled viewers, so the portal needs its own read.
 router.get('/admin/pending', authenticate, requireRole('ADMIN'), ctrl.listPending);
+router.get(
+  '/admin',
+  authenticate,
+  requireRole('CLINICAL_STAFF', 'ADMIN'),
+  validate({ query: staffListExercisesQuerySchema }),
+  ctrl.listForStaff
+);
 
 // ── Staff/Admin: local video upload (multipart) ───────────────────────────────
 router.post(

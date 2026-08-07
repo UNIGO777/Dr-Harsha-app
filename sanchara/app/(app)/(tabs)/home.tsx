@@ -16,11 +16,12 @@
 import { useRouter } from 'expo-router';
 import { Bell, UserRound } from 'lucide-react-native';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, RefreshControl, Text, View } from 'react-native';
 import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
+  DayCompleteCard,
   InsightCard,
   JourneyRow,
   LevelSegments,
@@ -33,10 +34,11 @@ import {
   WarmRing,
   WeekCard,
 } from '@/components/home';
-import { useCompleteRestDay } from '@/features/enrollments/api';
+import { dayAlreadyCompleted, useCompleteRestDay } from '@/features/enrollments/api';
 import { useHomeData } from '@/features/home/useHomeData';
+import { resolveThumbnail } from '@/lib/media';
 import { specialist, wallet as initialWallet } from '@/mocks/home';
-import { colors } from '@/theme/tokens';
+import { useThemeColors } from '@/theme/useTheme';
 
 /** Fallback photo for a program day that has no thumbnail of its own yet. */
 const SESSION_IMAGE =
@@ -50,6 +52,7 @@ function greetingFor(date: Date): string {
 }
 
 export default function HomeScreen() {
+  const colors = useThemeColors();
   const router = useRouter();
   const home = useHomeData();
   const restDay = useCompleteRestDay();
@@ -93,9 +96,15 @@ export default function HomeScreen() {
   }
 
   const { me, enrollment, today, ring, levelProgress, insight } = home;
+  // The enrolled program's own cover, when the clinic has uploaded one.
+  const sessionImage = resolveThumbnail(home.program ?? {}) ?? SESSION_IMAGE;
   const firstName = me?.name?.split(' ')[0] ?? 'there';
   const isRestDay = today?.isRestDay ?? false;
   const canStart = !!today?.programDayId && !isRestDay;
+
+  // One program day per calendar day. A session already in flight still wins —
+  // the patient started it before the lock, so let them finish.
+  const dayDone = !!today?.locked && !home.isResuming;
 
   const ctaLabel = home.isResuming
     ? 'Resume session'
@@ -107,11 +116,13 @@ export default function HomeScreen() {
     ? `You're ${(home.activeSession?.currentExerciseIndex ?? 0) + 1} of ${
         home.totalExercises || '—'
       } exercises in — pick up where you left off.`
-    : isRestDay
-      ? 'Rest and recover today. Your body is doing the work.'
-      : today?.title
-        ? `Ready for ${today.title.toLowerCase()}? You're doing great.`
-        : 'Ready to move today?';
+    : dayDone
+      ? "You've done your session for today. Come back tomorrow for the next one."
+      : isRestDay
+        ? 'Rest and recover today. Your body is doing the work.'
+        : today?.title
+          ? `Ready for ${today.title.toLowerCase()}? You're doing great.`
+          : 'Ready to move today?';
 
   return (
     <View className="flex-1 bg-base">
@@ -223,7 +234,9 @@ export default function HomeScreen() {
 
               {/* Today's session */}
               <View className="px-5 pt-7">
-                {today?.hasContent ? (
+                {dayDone ? (
+                  <DayCompleteCard unlocksOn={today?.unlocksOn} nextDayNumber={today?.dayNumber} />
+                ) : today?.hasContent ? (
                   <SessionCard
                     title={today.title ?? `Day ${today.dayNumber}`}
                     tags={isRestDay ? ['REST DAY'] : ['RECOVERY', 'GENTLE']}
@@ -234,16 +247,36 @@ export default function HomeScreen() {
                       ),
                     )}
                     exerciseCount={today.exercises.length}
-                    imageUrl={SESSION_IMAGE}
+                    imageUrl={sessionImage}
                     ctaLabel={ctaLabel}
                     busy={restDay.isPending}
                     onStart={() => {
                       if (isRestDay) {
-                        restDay.mutate();
-                      } else if (canStart) {
-                        // Pain check-in is collected on the session screen; the
-                        // server owns the safety gate from there.
-                        router.push('/(programs)');
+                        restDay.mutate(undefined, {
+                          onError: (err) => {
+                            if (dayAlreadyCompleted(err)) {
+                              Alert.alert(
+                                "That's today done",
+                                'Your next day opens tomorrow.',
+                              );
+                            }
+                          },
+                        });
+                        return;
+                      }
+                      // Mid-workout already: skip the check-in and drop straight
+                      // back where the server says they left off.
+                      if (home.isResuming) {
+                        router.push('/(session)/player');
+                        return;
+                      }
+                      if (canStart && today?.programDayId) {
+                        // Pain check-in first — the server owns the safety gate
+                        // and won't create a session on a high score.
+                        router.push({
+                          pathname: '/(session)/checkin',
+                          params: { programDayId: today.programDayId },
+                        });
                       }
                     }}
                   />

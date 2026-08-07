@@ -11,7 +11,8 @@ import { useState } from 'react';
 import { Text, View } from 'react-native';
 import Svg, { Circle, Ellipse, Rect } from 'react-native-svg';
 
-import { colors } from '@/theme/tokens';
+import { withAlpha } from '@/theme/tokens';
+import { useThemeColors } from '@/theme/useTheme';
 
 interface Hotspot {
   id: string;
@@ -59,6 +60,7 @@ const VIEW_H = 380;
 const DOT_R = 9;
 
 function Silhouette() {
+  const colors = useThemeColors();
   const fill = colors.surface;
   return (
     <>
@@ -79,6 +81,7 @@ interface BodyMapProps {
 }
 
 export function BodyMap({ selected, onToggle }: BodyMapProps) {
+  const colors = useThemeColors();
   const [side, setSide] = useState<'front' | 'back'>('front');
   const hotspots = side === 'front' ? FRONT : BACK;
 
@@ -111,7 +114,7 @@ export function BodyMap({ selected, onToggle }: BodyMapProps) {
               cx={h.cx}
               cy={h.cy}
               r={DOT_R}
-              fill={isSel ? colors.accent : 'rgba(184,184,190,0.22)'}
+              fill={isSel ? colors.accent : withAlpha(colors.textSecondary, 0.22)}
               stroke={isSel ? colors.accent : colors.border}
               strokeWidth={1.5}
               onPress={() => onToggle(h.id)}

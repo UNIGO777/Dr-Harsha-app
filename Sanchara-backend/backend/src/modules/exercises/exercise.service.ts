@@ -2,6 +2,7 @@ import mongoose, { Types } from 'mongoose';
 import { Exercise, type IExercise } from '../../models/exercise.model';
 import { ApiError } from '../../utils/ApiError';
 import { recordAudit } from '../../services/audit.service';
+import { getPlayableVideoUrl } from '../../services/video.service';
 import { toPublicExercise, toAdminExercise } from './exercise.serializer';
 import type { PublicExerciseDTO, AdminExerciseDTO } from './exercise.serializer';
 import type { Difficulty, Gender, GenderFilter, ExerciseStatus } from '../../constants/enums';
@@ -225,14 +226,37 @@ export async function createExercise(
 
 export async function updateExercise(
   id: string,
-  input: UpdateExerciseInput
+  input: UpdateExerciseInput,
+  actor?: { userId: string; role: TokenRole }
 ): Promise<AdminExerciseDTO> {
-  const doc = await Exercise.findByIdAndUpdate(
-    id,
-    { $set: input },
-    { new: true, runValidators: true }
-  );
+  const doc = await Exercise.findById(id);
   if (!doc) throw ApiError.notFound('Exercise not found');
+
+  const swappedVideo = input.videoUrl !== undefined && input.videoUrl !== doc.videoUrl;
+  Object.assign(doc, input);
+
+  /**
+   * SAFETY: swapping the video file on an APPROVED exercise sends it back to
+   * the approval queue. Otherwise unreviewed footage would reach patients under
+   * a previously-granted approval. Metadata-only edits keep the approval.
+   */
+  const requiresReReview = swappedVideo && doc.status === 'APPROVED';
+  if (requiresReReview) {
+    doc.status = 'PENDING_APPROVAL';
+    doc.approvedBy = undefined;
+  }
+
+  await doc.save();
+
+  if (requiresReReview && actor) {
+    await recordAudit({
+      actor: actor.userId,
+      actorRole: actor.role === 'ADMIN' ? 'ADMIN' : 'CLINICAL_STAFF',
+      action: 'VIDEO_UPLOADED',
+      metadata: { exerciseId: doc.id, reason: 'video_replaced_requires_reapproval' },
+    });
+  }
+
   return toAdminExercise(doc);
 }
 
@@ -284,4 +308,67 @@ export async function rejectExercise(
 export async function listPendingExercises(): Promise<AdminExerciseDTO[]> {
   const docs = await Exercise.find({ status: 'PENDING_APPROVAL' }).sort({ createdAt: 1 });
   return docs.map(toAdminExercise);
+}
+
+/**
+ * Staff library row. The public browse endpoint deliberately hides pending /
+ * rejected / clinical-exclusive items and strips videoUrl for non-entitled
+ * viewers — none of which suits the portal, so it gets its own read.
+ *
+ * `playbackUrl` is resolved through the video service so staff can preview;
+ * the raw storage key is never exposed as a playable path.
+ */
+export interface StaffExerciseDTO extends AdminExerciseDTO {
+  playbackUrl: string | null;
+  /** Thumbnail resolved to a servable URL (the DTO's thumbnailUrl is a key). */
+  thumbnailPlaybackUrl: string | null;
+}
+
+export interface StaffListQuery {
+  search?: string;
+  status?: ExerciseStatus;
+  difficulty?: Difficulty;
+  areaTag?: string;
+  page: number;
+  limit: number;
+}
+
+export async function listExercisesForStaff(query: StaffListQuery): Promise<{
+  data: StaffExerciseDTO[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+  statusCounts: Record<ExerciseStatus, number>;
+}> {
+  const filter: mongoose.QueryFilter<IExercise> = {};
+  if (query.status) filter.status = query.status;
+  if (query.difficulty) filter.difficulty = query.difficulty;
+  if (query.areaTag) filter.areaTag = query.areaTag;
+  if (query.search) filter.title = { $regex: escapeRegex(query.search), $options: 'i' };
+
+  const { page, limit } = query;
+  const [docs, total, counts] = await Promise.all([
+    Exercise.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
+    Exercise.countDocuments(filter),
+    // Unfiltered so the status tabs always show true totals.
+    Exercise.aggregate<{ _id: ExerciseStatus; n: number }>([
+      { $group: { _id: '$status', n: { $sum: 1 } } },
+    ]),
+  ]);
+
+  const statusCounts = { PENDING_APPROVAL: 0, APPROVED: 0, REJECTED: 0 } as Record<
+    ExerciseStatus,
+    number
+  >;
+  for (const row of counts) statusCounts[row._id] = row.n;
+
+  return {
+    data: docs.map((doc) => ({
+      ...toAdminExercise(doc),
+      playbackUrl: getPlayableVideoUrl(doc.videoUrl, true),
+      thumbnailPlaybackUrl: doc.thumbnailUrl
+        ? getPlayableVideoUrl(doc.thumbnailUrl, true)
+        : null,
+    })),
+    pagination: { page, limit, total, totalPages: Math.ceil(total / limit) || 0 },
+    statusCounts,
+  };
 }

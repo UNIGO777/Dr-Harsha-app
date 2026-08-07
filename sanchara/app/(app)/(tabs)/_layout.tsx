@@ -7,9 +7,10 @@
 import { Tabs } from 'expo-router';
 import { CalendarCheck, Dumbbell, LifeBuoy, LineChart } from 'lucide-react-native';
 
-import { colors } from '@/theme/tokens';
+import { useThemeColors } from '@/theme/useTheme';
 
 export default function TabsLayout() {
+  const colors = useThemeColors();
   return (
     <Tabs
       screenOptions={{

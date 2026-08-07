@@ -24,6 +24,14 @@ export interface IEnrollment {
   completedDays: number[];
   /** Levels fully completed (their day sets finished). */
   completedLevels: number[];
+  /**
+   * Clinic-local calendar day (YYYY-MM-DD) a program day was last completed on.
+   *
+   * Backs the one-session-per-day rule: the next day stays locked until the
+   * date moves on. Stored as a string because the rule is about calendar days,
+   * not instants — see utils/clinicDate.
+   */
+  lastCompletedOn?: string;
   status: EnrollmentStatus;
   startedAt?: Date;
   completedAt?: Date;
@@ -39,6 +47,7 @@ const enrollmentSchema = new Schema<IEnrollment>(
     currentDay: { type: Number, default: 1, min: 1 },
     completedDays: { type: [Number], default: [] },
     completedLevels: { type: [Number], default: [] },
+    lastCompletedOn: { type: String },
     status: { type: String, enum: ENROLLMENT_STATUSES, default: 'ACTIVE' },
     startedAt: { type: Date },
     completedAt: { type: Date },

@@ -10,7 +10,7 @@ import { Button, OtpInput } from '@/components/ui';
 import { useRequestOtp, useVerifyOtp } from '@/features/auth/api';
 import { formatCountdown, formatPhoneForDisplay } from '@/lib/formatters';
 import { useAuthStore } from '@/store/authStore';
-import { colors } from '@/theme/tokens';
+import { useThemeColors } from '@/theme/useTheme';
 
 const RESEND_SECONDS = 45;
 
@@ -20,6 +20,7 @@ function extractApiError(e: unknown, fallback: string): string {
 }
 
 export default function OtpScreen() {
+  const colors = useThemeColors();
   const router = useRouter();
   const { phone } = useLocalSearchParams<{ phone: string }>();
   const verifyOtp = useVerifyOtp();

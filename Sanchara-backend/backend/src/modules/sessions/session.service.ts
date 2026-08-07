@@ -1,7 +1,7 @@
 import { Types, type HydratedDocument } from 'mongoose';
 import { Session, type ISession } from '../../models/session.model';
 import { ApiError } from '../../utils/ApiError';
-import { getPlayableVideoUrl } from '../../services/video.service';
+import { getImageUrl, getPlayableVideoUrl } from '../../services/video.service';
 import { recordAudit } from '../../services/audit.service';
 import {
   getExercisesByIds,
@@ -9,7 +9,11 @@ import {
   type ExerciseSessionView,
 } from '../exercises/exercise.service';
 import { getProgramDayContentById, type ProgramDayContent } from '../programs/program.service';
-import { advanceForCompletedDay, type AdvanceResult } from '../enrollments/enrollment.service';
+import {
+  advanceForCompletedDay,
+  getDailyLock,
+  type AdvanceResult,
+} from '../enrollments/enrollment.service';
 import {
   getSessionStartContext,
   getUserContext,
@@ -72,6 +76,8 @@ export interface StartExerciseDTO {
   title: string;
   description?: string;
   thumbnailUrl?: string;
+  /** `thumbnailUrl` resolved to something a client can actually load. */
+  thumbnailImageUrl: string | null;
   durationSeconds: number;
   difficulty: Difficulty;
   areaTag: string[];
@@ -155,6 +161,7 @@ async function buildStartExercises(content: ProgramDayContent): Promise<StartExe
         title: v.title,
         description: v.description,
         thumbnailUrl: v.thumbnailUrl,
+        thumbnailImageUrl: getImageUrl(v.thumbnailUrl),
         durationSeconds: v.durationSeconds,
         difficulty: v.difficulty,
         areaTag: v.areaTag,
@@ -203,6 +210,20 @@ export async function startSession(
   const content = await getProgramDayContentById(input.programDayId);
   if (!content) throw ApiError.notFound('Program day not found');
   if (content.isRestDay) throw ApiError.badRequest('This is a rest day — there is no workout to start');
+
+  // ONE PROGRAM DAY PER CALENDAR DAY.
+  //
+  // Enforced here rather than in the app so it cannot be tapped around. SHORT
+  // programs are exempt: they are standalone extras that never advance the
+  // enrollment, so doing one does not consume the patient's day.
+  if (content.programType !== 'SHORT') {
+    const lock = await getDailyLock(userId);
+    if (lock.locked) {
+      throw new ApiError(409, 'You have already completed your session for today', {
+        details: { reason: 'day_already_completed', unlocksOn: lock.nextUnlocksOn },
+      });
+    }
+  }
 
   const session = await Session.create({
     user: new Types.ObjectId(userId),

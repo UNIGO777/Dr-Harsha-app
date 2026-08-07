@@ -1,5 +1,6 @@
 import { Program, type IProgram } from '../../models/program.model';
 import { ApiError } from '../../utils/ApiError';
+import { getImageUrl } from '../../services/video.service';
 import { getRecommendationProfile, type RecommendationProfile } from '../auth/auth.service';
 import type { ProgramSummary } from './program.service';
 import type { HydratedDocument } from 'mongoose';
@@ -75,6 +76,7 @@ function toSummary(p: HydratedDocument<IProgram>): ProgramSummary {
     type: p.type,
     durationDays: p.durationDays,
     thumbnailUrl: p.thumbnailUrl,
+    thumbnailImageUrl: getImageUrl(p.thumbnailUrl),
     difficultyLevel: p.difficultyLevel,
     goalTag: p.goalTag,
     suitableConditions: p.suitableConditions,

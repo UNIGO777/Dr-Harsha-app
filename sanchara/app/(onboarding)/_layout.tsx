@@ -2,6 +2,18 @@
 // running draft is held in the zustand onboardingStore, not in route params.
 import { Stack } from 'expo-router';
 
+import { useThemeColors } from '@/theme/useTheme';
+
 export default function OnboardingLayout() {
-  return <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />;
+  const colors = useThemeColors();
+
+  return (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        animation: "slide_from_right",
+        contentStyle: { backgroundColor: colors.base },
+      }}
+    />
+  );
 }

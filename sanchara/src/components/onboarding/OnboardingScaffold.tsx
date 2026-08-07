@@ -17,7 +17,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui';
 import { ONBOARDING_TOTAL_STEPS } from '@/features/onboarding/steps';
-import { colors } from '@/theme/tokens';
+import { withAlpha } from '@/theme/tokens';
+import { useThemeColors } from '@/theme/useTheme';
 
 interface OnboardingScaffoldProps {
   step: number;
@@ -65,6 +66,7 @@ export function OnboardingScaffold({
   onBack,
   onClose,
 }: OnboardingScaffoldProps) {
+  const colors = useThemeColors();
   const router = useRouter();
 
   return (
@@ -72,11 +74,13 @@ export function OnboardingScaffold({
       {image ? (
         <Image source={image} style={{ position: 'absolute', inset: 0 }} contentFit="cover" />
       ) : null}
+      {/* Both variants land on `colors.base`, so the photo/tint dissolves into
+          whichever canvas the active theme is using. */}
       <LinearGradient
         colors={
           image
-            ? ['rgba(11,11,12,0.25)', 'rgba(11,11,12,0.75)', colors.base]
-            : ['rgba(105,209,192,0.07)', 'transparent', colors.base]
+            ? [withAlpha(colors.base, 0.25), withAlpha(colors.base, 0.75), colors.base]
+            : [withAlpha(colors.accent, 0.07), 'transparent', colors.base]
         }
         locations={[0, 0.5, 1]}
         style={{ position: 'absolute', inset: 0 }}

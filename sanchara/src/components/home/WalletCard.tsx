@@ -14,7 +14,8 @@ import { Plus } from 'lucide-react-native';
 import { Pressable, Switch, Text, View } from 'react-native';
 
 import type { HomeWallet } from '@/mocks/home';
-import { colors } from '@/theme/tokens';
+import { withAlpha } from '@/theme/tokens';
+import { useThemeColors } from '@/theme/useTheme';
 
 interface WalletCardProps {
   wallet: HomeWallet;
@@ -23,6 +24,7 @@ interface WalletCardProps {
 }
 
 export function WalletCard({ wallet, onAddMoney, onToggleAutoRecharge }: WalletCardProps) {
+  const colors = useThemeColors();
   const { balanceInr, estimatedDaysRemaining, lowBalance, autoRecharge, autoRechargeAmount } =
     wallet;
 
@@ -49,7 +51,7 @@ export function WalletCard({ wallet, onAddMoney, onToggleAutoRecharge }: WalletC
             onAddMoney();
           }}
           className="flex-row items-center gap-1.5 rounded-pill px-4 py-3 active:opacity-80"
-          style={{ borderWidth: 1, borderColor: colors.accent, backgroundColor: 'rgba(79,224,172,0.1)' }}
+          style={{ borderWidth: 1, borderColor: colors.accent, backgroundColor: withAlpha(colors.accent, 0.1) }}
         >
           <Plus size={15} color={colors.accent} strokeWidth={2.5} />
           <Text className="font-sans-semibold text-[13px]" style={{ color: colors.accent }}>
@@ -77,7 +79,9 @@ export function WalletCard({ wallet, onAddMoney, onToggleAutoRecharge }: WalletC
           value={autoRecharge}
           onValueChange={onToggleAutoRecharge}
           trackColor={{ false: colors.border, true: colors.accent }}
-          thumbColor={colors.textPrimary}
+          // The thumb sits on the accent track, not the page, so it stays white
+          // in both themes — `textPrimary` would turn it near-black in light mode.
+          thumbColor="#FFFFFF"
           ios_backgroundColor={colors.border}
           accessibilityLabel="Auto-recharge wallet"
         />

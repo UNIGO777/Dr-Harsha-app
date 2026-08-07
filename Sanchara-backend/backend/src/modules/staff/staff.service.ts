@@ -8,7 +8,7 @@ import { StaffRefreshToken } from './staffRefreshToken.model';
 import { ApiError } from '../../utils/ApiError';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../utils/jwt';
 import type { StaffRole } from '../../constants/enums';
-import type { HydratedDocument } from 'mongoose';
+import type { HydratedDocument, Types } from 'mongoose';
 
 /**
  * Staff auth service — the clinical portal's login.
@@ -158,6 +158,20 @@ export async function logout(token: string): Promise<void> {
   } catch {
     // Swallow — logout is best-effort.
   }
+}
+
+/**
+ * The patients a staff member may see. ADMINs get `null` meaning "no
+ * restriction"; CLINICAL_STAFF are limited to their assigned list. Callers must
+ * treat `null` and `[]` differently — `[]` means "assigned nobody", not "all".
+ */
+export async function getVisiblePatientIds(
+  staffId: string,
+  role: StaffRole
+): Promise<Types.ObjectId[] | null> {
+  if (role === 'ADMIN') return null;
+  const staff = await Staff.findById(staffId).select('assignedPatients');
+  return staff?.assignedPatients ?? [];
 }
 
 /** The authenticated staff member's own profile (backs the portal shell). */

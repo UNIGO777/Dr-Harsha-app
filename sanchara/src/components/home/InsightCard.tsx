@@ -8,7 +8,7 @@
 import Svg, { Polyline } from 'react-native-svg';
 import { Text, View } from 'react-native';
 
-import { colors } from '@/theme/tokens';
+import { useThemeColors } from '@/theme/useTheme';
 
 interface InsightCardProps {
   headline: string;
@@ -22,6 +22,7 @@ const W = 110;
 const H = 44;
 
 export function InsightCard({ headline, delta, period, series }: InsightCardProps) {
+  const colors = useThemeColors();
   const points = series
     .map((value, i) => {
       const x = (i / Math.max(1, series.length - 1)) * W;

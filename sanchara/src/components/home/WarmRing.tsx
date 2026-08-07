@@ -21,7 +21,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 
-import { colors } from '@/theme/tokens';
+import { useThemeColors } from '@/theme/useTheme';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -60,6 +60,7 @@ export function WarmRing({
   totalDays,
   accessibilityText,
 }: WarmRingProps) {
+  const colors = useThemeColors();
   const reduceMotion = useReducedMotion();
   const outerProgress = useSharedValue(0);
   const innerProgress = useSharedValue(0);

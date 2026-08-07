@@ -4,7 +4,7 @@
  */
 import { Pressable, Text, View } from 'react-native';
 
-import { colors } from '@/theme/tokens';
+import { useThemeColors } from '@/theme/useTheme';
 
 interface SectionHeaderProps {
   label: string;
@@ -13,6 +13,7 @@ interface SectionHeaderProps {
 }
 
 export function SectionHeader({ label, actionLabel, onAction }: SectionHeaderProps) {
+  const colors = useThemeColors();
   return (
     <View className="mb-3 flex-row items-center justify-between">
       <Text

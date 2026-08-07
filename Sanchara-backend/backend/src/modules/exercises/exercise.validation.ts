@@ -23,6 +23,16 @@ export const listExercisesQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
+/** Portal library list — all statuses, unlike the public browse. */
+export const staffListExercisesQuerySchema = z.object({
+  search: z.string().trim().min(1).max(100).optional(),
+  status: z.enum(EXERCISE_STATUSES).optional(),
+  difficulty: z.enum(DIFFICULTIES).optional(),
+  areaTag: z.string().trim().min(1).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+
 export const exerciseIdParamSchema = z.object({
   id: objectId,
 });
@@ -74,6 +84,7 @@ export const rejectExerciseSchema = z.object({
 });
 
 export type ListExercisesQuery = z.infer<typeof listExercisesQuerySchema>;
+export type StaffListExercisesQuery = z.infer<typeof staffListExercisesQuerySchema>;
 export type AlternativesQuery = z.infer<typeof alternativesQuerySchema>;
 export type CreateExerciseInput = z.infer<typeof createExerciseSchema>;
 export type UpdateExerciseInput = z.infer<typeof updateExerciseSchema>;

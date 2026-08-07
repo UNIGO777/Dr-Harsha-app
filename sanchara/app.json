@@ -6,14 +6,14 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "sanchara",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "backgroundColor": "#0B0B0C",
     "ios": {
       "icon": "./assets/expo.icon",
-      "userInterfaceStyle": "dark"
+      "userInterfaceStyle": "automatic"
     },
     "android": {
-      "userInterfaceStyle": "dark",
+      "userInterfaceStyle": "automatic",
       "adaptiveIcon": {
         "backgroundColor": "#0B0B0C",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -32,9 +32,13 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#0B0B0C",
+          "backgroundColor": "#FAFAF8",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 76,
+          "dark": {
+            "backgroundColor": "#0B0B0C",
+            "image": "./assets/images/splash-icon.png"
+          }
         }
       ],
       "expo-secure-store",

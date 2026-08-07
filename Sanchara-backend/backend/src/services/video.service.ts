@@ -22,3 +22,17 @@ export function getPlayableVideoUrl(storageKey: string, isEntitled: boolean): st
   const normalizedKey = storageKey.replace(/^\/+/, '');
   return `${LOCAL_MEDIA_PREFIX}/${normalizedKey}`;
 }
+
+/**
+ * Resolve a thumbnail/cover reference to something an <img> can load.
+ *
+ * Unlike videos these are not entitlement-gated (a cover image is browse
+ * metadata), and the stored value may be EITHER an uploaded storage key or an
+ * absolute URL — the demo seed uses remote images while uploads produce keys.
+ * Absolute URLs pass through untouched.
+ */
+export function getImageUrl(keyOrUrl: string | undefined | null): string | null {
+  if (!keyOrUrl) return null;
+  if (/^https?:\/\//i.test(keyOrUrl)) return keyOrUrl;
+  return `${LOCAL_MEDIA_PREFIX}/${keyOrUrl.replace(/^\/+/, '')}`;
+}

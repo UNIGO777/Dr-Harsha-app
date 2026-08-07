@@ -3,6 +3,7 @@ import { validate } from '../../middleware/validate';
 import { authenticate } from '../../middleware/authenticate';
 import { requireActiveAccess } from '../../middleware/requireActiveAccess';
 import { requireRole } from '../../middleware/requireRole';
+import { uploadImage } from '../../services/upload.service';
 import * as ctrl from './program.controller';
 import {
   createProgramSchema,
@@ -13,6 +14,7 @@ import {
   createDaySchema,
   updateDaySchema,
   listDaysQuerySchema,
+  adminListProgramsQuerySchema,
   programIdParamSchema,
   programDayParamSchema,
   programLevelParamSchema,
@@ -35,7 +37,24 @@ const activeUser = [authenticate, requireActiveAccess] as const;
 router.get('/recommended', ...activeUser, ctrl.getRecommended);
 router.get('/', ...activeUser, validate({ query: listProgramsQuerySchema }), ctrl.listPrograms);
 
+// ── Staff reads (clinical portal) — BEFORE /:id so 'admin' isn't read as an id.
+// Separate from the patient list because that one sits behind requireActiveAccess
+// (a patient-only gate) and hides unpublished drafts.
+router.get(
+  '/admin',
+  ...staffOnly,
+  validate({ query: adminListProgramsQuerySchema }),
+  ctrl.listProgramsForStaff
+);
+router.get(
+  '/admin/:id',
+  ...staffOnly,
+  validate({ params: programIdParamSchema }),
+  ctrl.getProgramForStaff
+);
+
 // ── Management: programs ───────────────────────────────────────────────────────
+router.post('/thumbnail', ...staffOnly, uploadImage, ctrl.uploadThumbnail);
 router.post('/', ...staffOnly, validate({ body: createProgramSchema }), ctrl.createProgram);
 
 // ── Management: levels (M2.5-L, before /:id) ───────────────────────────────────

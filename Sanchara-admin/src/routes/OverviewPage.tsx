@@ -15,13 +15,13 @@ export function OverviewPage() {
   const firstName = staff?.name?.split(' ')[0] ?? 'there';
 
   return (
-    <div className="mx-auto max-w-5xl px-8 py-8">
+    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
       <PageHeader
         title={`Welcome back, ${firstName}`}
         subtitle="Signed in to the Sanchara clinical portal."
       />
 
-      <div className="mt-8 grid grid-cols-2 gap-4">
+      <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <PendingTile
           icon={Users}
           title="Patients"
@@ -52,7 +52,7 @@ export function OverviewPage() {
 
       <div className="mt-8 rounded-card border border-edge bg-surface p-5">
         <p className="label-micro">Session</p>
-        <dl className="mt-3 grid grid-cols-3 gap-4 text-sm">
+        <dl className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3 text-sm">
           <div>
             <dt className="text-ink-faint">Email</dt>
             <dd className="mt-0.5 text-ink">{staff?.email}</dd>

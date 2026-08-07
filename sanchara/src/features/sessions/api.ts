@@ -30,6 +30,8 @@ export interface StartExercise {
   title: string;
   description?: string;
   thumbnailUrl?: string;
+  /** Server-resolved cover URL. Prefer this over `thumbnailUrl`, which is a raw storage key. */
+  thumbnailImageUrl?: string | null;
   durationSeconds: number;
   difficulty: 'EASY' | 'MEDIUM' | 'HARD';
   areaTag: string[];
@@ -151,9 +153,143 @@ export function useStartSession() {
       return data;
     },
     onSuccess: (result) => {
-      if (!result.blocked) {
-        qc.invalidateQueries({ queryKey: ['sessions', 'active'] });
-      }
+      if (result.blocked) return;
+      // Seed synchronously: the caller navigates straight to the player, which
+      // reads this exact query. Invalidation alone would leave it reading the
+      // pre-session `{active:false}` and bounce the user back out.
+      qc.setQueryData<ActiveSessionResponse>(['sessions', 'active'], {
+        active: true,
+        session: {
+          sessionId: result.sessionId,
+          state: result.state,
+          levelNumber: result.levelNumber,
+          dayNumber: result.dayNumber,
+          currentExerciseIndex: result.currentExerciseIndex,
+          painCheckin: [],
+        },
+        exercises: result.exercises,
+      });
+      qc.invalidateQueries({ queryKey: ['sessions', 'active'] });
+    },
+  });
+}
+
+/**
+ * Move the server-side state machine along. The server rejects illegal jumps,
+ * so the player mirrors the real transition table:
+ *   WARMUP → EXERCISE_ACTIVE → NEXT_EXERCISE → EXERCISE_ACTIVE → … → SESSION_SUMMARY
+ */
+export function useAdvanceState() {
+  return useMutation({
+    mutationFn: async ({ sessionId, nextState }: { sessionId: string; nextState: SessionState }) => {
+      const { data } = await api.patch<{ success: boolean; state: SessionState }>(
+        endpoints.sessions.state(sessionId),
+        { nextState },
+      );
+      return data;
+    },
+  });
+}
+
+export interface CompleteExerciseResult {
+  sessionId: string;
+  /** Resume pointer AFTER this exercise — the index the player moves to. */
+  currentExerciseIndex: number;
+  alternative: {
+    exerciseId: string;
+    title: string;
+    difficulty: 'EASY' | 'MEDIUM' | 'HARD';
+    videoUrl: string | null;
+  } | null;
+}
+
+/**
+ * Record one exercise and advance the resume pointer.
+ *
+ * `easeScore` (1–10) is MANDATORY server-side — it feeds the progression engine
+ * and the ease trajectory chart, so the player must collect it before moving on.
+ * `tooHard`/`tooEasy` make the server suggest an easier/harder alternative.
+ */
+export function useCompleteExercise() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      sessionId,
+      exerciseId,
+      ...body
+    }: {
+      sessionId: string;
+      exerciseId: string;
+      setsCompleted?: number;
+      easeScore: number;
+      restTimerSeconds?: number;
+      tooHard?: boolean;
+      tooEasy?: boolean;
+    }) => {
+      const { data } = await api.post<CompleteExerciseResult>(
+        endpoints.sessions.exerciseComplete(sessionId, exerciseId),
+        body,
+      );
+      return data;
+    },
+    onSuccess: (result) => {
+      // Move the resume pointer in place so the player advances to the next
+      // exercise on this render rather than after a refetch round-trip.
+      qc.setQueryData<ActiveSessionResponse>(['sessions', 'active'], (prev) =>
+        prev?.session
+          ? {
+              ...prev,
+              session: { ...prev.session, currentExerciseIndex: result.currentExerciseIndex },
+            }
+          : prev,
+      );
+      qc.invalidateQueries({ queryKey: ['sessions', 'active'] });
+    },
+  });
+}
+
+export interface CompleteSessionResult {
+  session: { id: string; state: SessionState; completionStatus?: SessionCompletion };
+  /** Enrollment advance outcome — null for SHORT programs, which never progress it. */
+  enrollment: {
+    advanced: boolean;
+    currentLevel?: number;
+    currentDay?: number;
+    levelAdvanced?: boolean;
+    programCompleted?: boolean;
+  } | null;
+}
+
+/** Finalise the session. This is what advances the enrollment to the next day. */
+export function useCompleteSession() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ sessionId }: { sessionId: string }) => {
+      const { data } = await api.post<CompleteSessionResult>(
+        endpoints.sessions.complete(sessionId),
+        {},
+      );
+      return data;
+    },
+    onSuccess: () => {
+      // Day/level moved on: the ring, week strip, calendar and trends all shift.
+      qc.invalidateQueries({ queryKey: ['enrollment'] });
+      qc.invalidateQueries({ queryKey: ['sessions'] });
+    },
+  });
+}
+
+/** Bail out of a session. Keeps the record (as ABANDONED) rather than deleting it. */
+export function useAbandonSession() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ sessionId }: { sessionId: string }) => {
+      const { data } = await api.post(endpoints.sessions.abandon(sessionId), {});
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['sessions'] });
+      qc.invalidateQueries({ queryKey: ['enrollment'] });
     },
   });
 }

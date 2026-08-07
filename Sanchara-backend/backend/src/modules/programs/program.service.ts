@@ -4,6 +4,7 @@ import { ProgramLevel, type IProgramLevel } from '../../models/programLevel.mode
 import { ProgramDay, type IProgramDay } from '../../models/programDay.model';
 import { ApiError } from '../../utils/ApiError';
 import { getExercisesByIds } from '../exercises/exercise.service';
+import { getImageUrl } from '../../services/video.service';
 import type { ProgramType, Difficulty } from '../../constants/enums';
 import type {
   CreateProgramInput,
@@ -32,7 +33,10 @@ export interface ProgramSummary {
   description?: string;
   type: ProgramType;
   durationDays?: number;
+  /** Raw stored value — a storage key, or an absolute URL for seeded content. */
   thumbnailUrl?: string;
+  /** Ready for an <img src>; handles both storage keys and absolute URLs. */
+  thumbnailImageUrl: string | null;
   difficultyLevel?: Difficulty;
   goalTag: string[];
   suitableConditions: string[];
@@ -65,6 +69,12 @@ export interface AdminDayExercise {
   notes?: string;
   title?: string;
   difficulty?: Difficulty;
+  /**
+   * False when the exercise is no longer APPROVED (or was deleted). The session
+   * engine SKIPS these, so the patient sees fewer exercises than are listed
+   * here — which is invisible unless we say so.
+   */
+  playable: boolean;
 }
 
 export interface AdminDay {
@@ -76,6 +86,8 @@ export interface AdminDay {
   isRestDay: boolean;
   estimatedDurationSeconds?: number;
   exercises: AdminDayExercise[];
+  /** How many of `exercises` the patient will NOT be shown. 0 when healthy. */
+  unavailableCount: number;
 }
 
 /** Internal content view consumed by the sessions + enrollments engines. */
@@ -108,6 +120,7 @@ function toSummary(p: HydratedDocument<IProgram>): ProgramSummary {
     type: p.type,
     durationDays: p.durationDays,
     thumbnailUrl: p.thumbnailUrl,
+    thumbnailImageUrl: getImageUrl(p.thumbnailUrl),
     difficultyLevel: p.difficultyLevel,
     goalTag: p.goalTag,
     suitableConditions: p.suitableConditions,
@@ -125,6 +138,11 @@ async function assertProgramExists(programId: string): Promise<void> {
 
 function isDuplicateKeyError(err: unknown): boolean {
   return err instanceof mongoose.mongo.MongoServerError && err.code === 11000;
+}
+
+/** Neutralise regex metacharacters so a search term can't alter the query. */
+function escapeRegex(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /** Day counts per levelNumber for one program (single aggregate). */
@@ -385,6 +403,7 @@ async function hydrateAdminDay(day: HydratedDocument<IProgramDay>): Promise<Admi
         notes: e.notes,
         title: v?.title,
         difficulty: v?.difficulty,
+        playable: !!v,
       };
     });
   return {
@@ -396,6 +415,7 @@ async function hydrateAdminDay(day: HydratedDocument<IProgramDay>): Promise<Admi
     isRestDay: day.isRestDay,
     estimatedDurationSeconds: day.estimatedDurationSeconds,
     exercises,
+    unavailableCount: exercises.filter((e) => !e.playable).length,
   };
 }
 
@@ -419,6 +439,108 @@ export async function listPublishedPrograms(
   return {
     data: docs.map(toSummary),
     pagination: { page, limit, total, totalPages: Math.ceil(total / limit) || 0 },
+  };
+}
+
+// ── Staff reads (clinical portal) ─────────────────────────────────────────────
+/**
+ * Portal list row. Unlike the patient-facing list this includes UNPUBLISHED
+ * drafts and inactive programs — staff need to see what they're still building —
+ * plus level/day counts so the table is useful at a glance.
+ */
+export interface AdminProgramRow extends ProgramSummary {
+  isActive: boolean;
+  levelCount: number;
+  dayCount: number;
+  updatedAt: Date;
+}
+
+export interface AdminListQuery {
+  search?: string;
+  type?: ProgramType;
+  isPublished?: boolean;
+  page: number;
+  limit: number;
+}
+
+export async function listProgramsForStaff(query: AdminListQuery): Promise<{
+  data: AdminProgramRow[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+}> {
+  const filter: mongoose.QueryFilter<IProgram> = {};
+  if (query.type) filter.type = query.type;
+  if (query.isPublished !== undefined) filter.isPublished = query.isPublished;
+  if (query.search) {
+    filter.name = { $regex: escapeRegex(query.search), $options: 'i' };
+  }
+
+  const { page, limit } = query;
+  const [docs, total] = await Promise.all([
+    Program.find(filter).sort({ updatedAt: -1 }).skip((page - 1) * limit).limit(limit),
+    Program.countDocuments(filter),
+  ]);
+
+  // Two grouped counts rather than N queries per row.
+  const ids = docs.map((d) => d._id);
+  const [levelCounts, dayCounts] = await Promise.all([
+    ProgramLevel.aggregate<{ _id: Types.ObjectId; count: number }>([
+      { $match: { program: { $in: ids } } },
+      { $group: { _id: '$program', count: { $sum: 1 } } },
+    ]),
+    ProgramDay.aggregate<{ _id: Types.ObjectId; count: number }>([
+      { $match: { program: { $in: ids } } },
+      { $group: { _id: '$program', count: { $sum: 1 } } },
+    ]),
+  ]);
+  const levelBy = new Map(levelCounts.map((r) => [r._id.toString(), r.count]));
+  const dayBy = new Map(dayCounts.map((r) => [r._id.toString(), r.count]));
+
+  return {
+    data: docs.map((p) => ({
+      ...toSummary(p),
+      isActive: p.isActive,
+      levelCount: levelBy.get(p.id) ?? 0,
+      dayCount: dayBy.get(p.id) ?? 0,
+      updatedAt: p.updatedAt,
+    })),
+    pagination: { page, limit, total, totalPages: Math.ceil(total / limit) || 0 },
+  };
+}
+
+export interface AdminProgramDetail extends AdminProgramRow {
+  levels: (LevelSummary & { days: AdminDay[] })[];
+  /** Days with no level — flat programs (e.g. SHORT). */
+  days: AdminDay[];
+}
+
+/**
+ * Portal detail: the full authoring tree regardless of publish state. The
+ * patient-facing `getProgramDetail` deliberately hides drafts, so staff need
+ * their own read.
+ */
+export async function getProgramDetailForStaff(programId: string): Promise<AdminProgramDetail> {
+  const program = await Program.findById(programId);
+  if (!program) throw ApiError.notFound('Program not found');
+
+  const [levels, dayDocs] = await Promise.all([
+    ProgramLevel.find({ program: programId }).sort({ levelNumber: 1 }),
+    ProgramDay.find({ program: programId }).sort({ levelNumber: 1, dayNumber: 1 }),
+  ]);
+
+  const hydrated = await Promise.all(dayDocs.map((d) => hydrateAdminDay(d)));
+  const counts = await dayCountsByLevel(programId);
+
+  return {
+    ...toSummary(program),
+    isActive: program.isActive,
+    levelCount: levels.length,
+    dayCount: dayDocs.length,
+    updatedAt: program.updatedAt,
+    levels: levels.map((l) => ({
+      ...toLevelSummary(l, counts.get(l.levelNumber) ?? 0),
+      days: hydrated.filter((d) => d.levelNumber === l.levelNumber),
+    })),
+    days: hydrated.filter((d) => d.levelNumber === undefined),
   };
 }
 
@@ -546,6 +668,7 @@ export interface ProgramMeta {
   type: ProgramType;
   durationDays?: number;
   thumbnailUrl?: string;
+  thumbnailImageUrl: string | null;
 }
 
 export async function getProgramMeta(programId: string): Promise<ProgramMeta | null> {
@@ -557,5 +680,6 @@ export async function getProgramMeta(programId: string): Promise<ProgramMeta | n
     type: program.type,
     durationDays: program.durationDays,
     thumbnailUrl: program.thumbnailUrl,
+    thumbnailImageUrl: getImageUrl(program.thumbnailUrl),
   };
 }

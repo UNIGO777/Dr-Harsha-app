@@ -17,7 +17,7 @@ interface PlaceholderPageProps {
 
 export function PlaceholderPage({ title, subtitle, backend }: PlaceholderPageProps) {
   return (
-    <div className="mx-auto max-w-5xl px-8 py-8">
+    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
       <PageHeader title={title} subtitle={subtitle} />
 
       <div className="mt-8 flex flex-col items-center justify-center rounded-card border border-dashed border-edge bg-surface/50 px-6 py-16 text-center">

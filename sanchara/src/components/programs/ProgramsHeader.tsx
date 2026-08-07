@@ -6,9 +6,10 @@
 import { ChevronLeft } from 'lucide-react-native';
 import { Pressable, Text, View } from 'react-native';
 
-import { colors } from '@/theme/tokens';
+import { useThemeColors } from '@/theme/useTheme';
 
 export function ProgramsHeader({ title = 'Programs', onBack }: { title?: string; onBack?: () => void }) {
+  const colors = useThemeColors();
   return (
     <View className="h-14 flex-row items-center border-b border-border bg-base px-4">
       {onBack ? (

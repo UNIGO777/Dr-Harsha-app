@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { ApiError } from '../../utils/ApiError';
+import { toStorageKey } from '../../services/upload.service';
 import * as programService from './program.service';
 import { getRecommendations } from './recommendation.service';
 import type {
@@ -11,6 +12,7 @@ import type {
   UpdateDayInput,
   ListDaysQuery,
   ListProgramsQuery,
+  AdminListProgramsQuery,
 } from './program.validation';
 
 function staffId(req: Request): string {
@@ -134,6 +136,27 @@ export async function listDays(req: Request, res: Response, next: NextFunction):
   }
 }
 
+// ── Staff reads (portal) ──────────────────────────────────────────────────────
+export async function listProgramsForStaff(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const result = await programService.listProgramsForStaff(
+      req.query as unknown as AdminListProgramsQuery,
+    );
+    res.json({ success: true, ...result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getProgramForStaff(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const program = await programService.getProgramDetailForStaff(req.params.id as string);
+    res.json({ success: true, program });
+  } catch (err) {
+    next(err);
+  }
+}
+
 // ── Public ────────────────────────────────────────────────────────────────────
 export async function listPrograms(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -157,6 +180,20 @@ export async function getRecommended(req: Request, res: Response, next: NextFunc
   try {
     const recommendations = await getRecommendations(userId(req));
     res.json({ success: true, recommendations });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/programs/thumbnail — stores a cover image and returns its STORAGE
+ * KEY, which is then saved on the program via POST/PATCH /programs. No public
+ * URL is persisted.
+ */
+export async function uploadThumbnail(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    if (!req.file) throw ApiError.badRequest('Choose an image (multipart field "image")');
+    res.status(201).json({ success: true, thumbnailStorageKey: toStorageKey(req.file) });
   } catch (err) {
     next(err);
   }

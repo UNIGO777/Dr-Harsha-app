@@ -10,7 +10,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui';
 import { useAuthStore } from '@/store/authStore';
 import { useOnboardingStore } from '@/store/onboardingStore';
-import { colors } from '@/theme/tokens';
+import { withAlpha } from '@/theme/tokens';
+import { useThemeColors } from '@/theme/useTheme';
 
 function FeatureRow({
   icon: Icon,
@@ -21,6 +22,7 @@ function FeatureRow({
   title: string;
   subtitle: string;
 }) {
+  const colors = useThemeColors();
   return (
     <View className="flex-row items-center rounded-card border border-border bg-surface/80 p-4">
       <Icon color={colors.accent} size={22} strokeWidth={2} />
@@ -33,6 +35,7 @@ function FeatureRow({
 }
 
 export default function SuccessScreen() {
+  const colors = useThemeColors();
   const router = useRouter();
   const { waitlisted } = useLocalSearchParams<{ waitlisted?: string }>();
   const resetOnboarding = useOnboardingStore((s) => s.reset);
@@ -53,7 +56,7 @@ export default function SuccessScreen() {
   return (
     <View className="flex-1 bg-base">
       <LinearGradient
-        colors={['rgba(105,209,192,0.10)', 'transparent', colors.base]}
+        colors={[withAlpha(colors.accent, 0.1), 'transparent', colors.base]}
         locations={[0, 0.5, 1]}
         style={{ position: 'absolute', inset: 0 }}
       />

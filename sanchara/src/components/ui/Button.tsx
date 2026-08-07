@@ -6,7 +6,8 @@
 import * as Haptics from 'expo-haptics';
 import { ActivityIndicator, Pressable, Text, type PressableProps } from 'react-native';
 
-import { colors } from '@/theme/tokens';
+import type { Palette } from '@/theme/tokens';
+import { useThemeColors } from '@/theme/useTheme';
 
 type Variant = 'primary' | 'secondary' | 'ghost';
 
@@ -25,11 +26,12 @@ const containerByVariant: Record<Variant, string> = {
 // Label colors are applied via inline style (not className): NativeWind doesn't
 // reliably resolve an interpolated color class here, which silently falls back
 // to black (only invisible on primary since accentText is already near-black).
-const labelColorByVariant: Record<Variant, string> = {
-  primary: colors.accentText,
-  secondary: colors.textPrimary,
-  ghost: colors.accent,
-};
+// Takes the palette so both themes resolve from the same rule set.
+const labelColorByVariant = (c: Palette): Record<Variant, string> => ({
+  primary: c.accentText,
+  secondary: c.textPrimary,
+  ghost: c.accent,
+});
 
 export function Button({
   label,
@@ -39,6 +41,7 @@ export function Button({
   onPress,
   ...rest
 }: ButtonProps) {
+  const colors = useThemeColors();
   const isDisabled = disabled || loading;
 
   return (
@@ -58,7 +61,10 @@ export function Button({
       {loading ? (
         <ActivityIndicator color={variant === 'primary' ? colors.accentText : colors.accent} />
       ) : (
-        <Text style={{ color: labelColorByVariant[variant] }} className="font-sans-semibold text-base">
+        <Text
+          style={{ color: labelColorByVariant(colors)[variant] }}
+          className="font-sans-semibold text-base"
+        >
           {label}
         </Text>
       )}
