@@ -10,7 +10,8 @@
     "backgroundColor": "#0B0B0C",
     "ios": {
       "icon": "./assets/expo.icon",
-      "userInterfaceStyle": "automatic"
+      "userInterfaceStyle": "automatic",
+      "bundleIdentifier": "com.naman_123.sanchara"
     },
     "android": {
       "userInterfaceStyle": "automatic",
@@ -42,7 +43,8 @@
         }
       ],
       "expo-secure-store",
-      "expo-video"
+      "expo-video",
+      "./plugins/withReleaseSigning"
     ],
     "experiments": {
       "typedRoutes": true,

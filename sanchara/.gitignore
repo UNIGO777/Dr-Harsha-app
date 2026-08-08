@@ -44,3 +44,6 @@ example
 
 # local env
 .env
+
+# Android release signing — NEVER commit. Back this up separately.
+/credentials
