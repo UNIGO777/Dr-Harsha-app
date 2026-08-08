@@ -11,7 +11,8 @@
  * /sessions/trends, /programs?type=SHORT.
  *
  * The ONE exception is the wallet: it has no backend yet (the Subscription model
- * has no wallet/ledger), so that card stays on local state and is clearly marked.
+ * has no wallet/ledger), so it reads the provisional walletStore — the same
+ * source the Wallet tab uses, so the two can't show different balances.
  */
 import { useRouter } from 'expo-router';
 import { Bell, UserRound } from 'lucide-react-native';
@@ -21,6 +22,7 @@ import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
+  BookConsultationSheet,
   DayCompleteCard,
   InsightCard,
   JourneyRow,
@@ -36,8 +38,10 @@ import {
 } from '@/components/home';
 import { dayAlreadyCompleted, useCompleteRestDay } from '@/features/enrollments/api';
 import { useHomeData } from '@/features/home/useHomeData';
+import { useNotifications } from '@/features/notifications/useNotifications';
 import { resolveThumbnail } from '@/lib/media';
-import { specialist, wallet as initialWallet } from '@/mocks/home';
+import { specialist } from '@/mocks/home';
+import { LOW_BALANCE_INR, daysRemaining, useWalletStore } from '@/store/walletStore';
 import { useThemeColors } from '@/theme/useTheme';
 
 /** Fallback photo for a program day that has no thumbnail of its own yet. */
@@ -58,12 +62,25 @@ export default function HomeScreen() {
   const restDay = useCompleteRestDay();
   const scrollY = useSharedValue(0);
 
-  // Wallet is UI-only until the backend lands (see WalletCard).
-  const [wallet, setWallet] = useState(initialWallet);
+  // Wallet is UI-only until the backend lands (see src/store/walletStore.ts).
+  const walletBalance = useWalletStore((s) => s.balanceInr);
+  const walletAutoRecharge = useWalletStore((s) => s.autoRecharge);
+  const walletAutoRechargeAmount = useWalletStore((s) => s.autoRechargeAmount);
+  const setWalletAutoRecharge = useWalletStore((s) => s.setAutoRecharge);
+  const wallet = {
+    balanceInr: walletBalance,
+    estimatedDaysRemaining: daysRemaining(walletBalance),
+    lowBalance: walletBalance <= LOW_BALANCE_INR,
+    autoRecharge: walletAutoRecharge,
+    autoRechargeAmount: walletAutoRechargeAmount,
+  };
 
   const scrollHandler = useAnimatedScrollHandler((e) => {
     scrollY.value = e.contentOffset.y;
   });
+
+  const [booking, setBooking] = useState(false);
+  const { actionableCount: alerts } = useNotifications();
 
   if (home.isLoading) {
     return (
@@ -130,6 +147,9 @@ export default function HomeScreen() {
         scrollY={scrollY}
         balanceLabel={`₹${wallet.balanceInr}`}
         onPressProfile={() => router.push('/(app)/(tabs)/profile')}
+        onPressWallet={() => router.push('/(app)/(tabs)/wallet')}
+        onPressAlerts={() => router.push('/(app)/(tabs)/notifications')}
+        alertCount={alerts}
       />
 
       <SafeAreaView className="flex-1" edges={['top']}>
@@ -180,11 +200,20 @@ export default function HomeScreen() {
               </View>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Notifications"
+                accessibilityLabel={
+                  alerts > 0 ? `Notifications, ${alerts} need attention` : 'Notifications'
+                }
+                onPress={() => router.push('/(app)/(tabs)/notifications')}
                 className="h-9 w-9 items-center justify-center rounded-pill active:opacity-70"
                 style={{ backgroundColor: colors.inputFill }}
               >
                 <Bell size={17} color={colors.textSecondary} />
+                {alerts > 0 ? (
+                  <View
+                    className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-pill"
+                    style={{ backgroundColor: colors.amber, borderWidth: 1.5, borderColor: colors.inputFill }}
+                  />
+                ) : null}
               </Pressable>
               <Pressable
                 accessibilityRole="button"
@@ -349,8 +378,8 @@ export default function HomeScreen() {
           <View className="px-5 pt-4">
             <WalletCard
               wallet={wallet}
-              onAddMoney={() => {}}
-              onToggleAutoRecharge={(value) => setWallet((w) => ({ ...w, autoRecharge: value }))}
+              onAddMoney={() => router.push('/(app)/(tabs)/wallet')}
+              onToggleAutoRecharge={setWalletAutoRecharge}
             />
           </View>
 
@@ -386,12 +415,20 @@ export default function HomeScreen() {
             <SpecialistCard
               name={specialist.name}
               title={specialist.title}
-              avatarUrl={specialist.avatarUrl}
-              onBook={() => {}}
+              avatar={specialist.avatar}
+              onBook={() => setBooking(true)}
             />
           </View>
         </Animated.ScrollView>
       </SafeAreaView>
+
+      <BookConsultationSheet
+        visible={booking}
+        onClose={() => setBooking(false)}
+        name={specialist.name}
+        title={specialist.title}
+        avatar={specialist.avatar}
+      />
     </View>
   );
 }

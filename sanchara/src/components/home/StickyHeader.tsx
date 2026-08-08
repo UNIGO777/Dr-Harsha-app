@@ -27,6 +27,9 @@ interface StickyHeaderProps {
   balanceLabel?: string;
   onPressWallet?: () => void;
   onPressProfile?: () => void;
+  onPressAlerts?: () => void;
+  /** > 0 shows the dot on the bell. */
+  alertCount?: number;
 }
 
 export function StickyHeader({
@@ -35,6 +38,8 @@ export function StickyHeader({
   balanceLabel,
   onPressWallet,
   onPressProfile,
+  onPressAlerts,
+  alertCount = 0,
 }: StickyHeaderProps) {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
@@ -113,11 +118,20 @@ export function StickyHeader({
             ) : null}
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Notifications"
+              accessibilityLabel={
+                alertCount > 0 ? `Notifications, ${alertCount} need attention` : 'Notifications'
+              }
+              onPress={onPressAlerts}
               className="h-8 w-8 items-center justify-center rounded-pill active:opacity-70"
               style={{ backgroundColor: colors.inputFill }}
             >
               <Bell size={15} color={colors.textSecondary} />
+              {alertCount > 0 ? (
+                <View
+                  className="absolute right-1 top-1 h-2.5 w-2.5 rounded-pill"
+                  style={{ backgroundColor: colors.amber, borderWidth: 1.5, borderColor: colors.inputFill }}
+                />
+              ) : null}
             </Pressable>
             <Pressable
               accessibilityRole="button"

@@ -30,10 +30,12 @@ module.exports = {
         danger: 'rgb(var(--color-danger) / <alpha-value>)',
       },
       fontFamily: {
-        // display serif (Fraunces)
-        display: ['Fraunces'],
-        'display-semibold': ['Fraunces-SemiBold'],
-        'display-bold': ['Fraunces-Bold'],
+        // Headline tier — same face as the body text, separated by weight/size.
+        // Kept as its own utility name so the ~44 `font-display-*` usages still
+        // say "heading" and can be re-pointed at another face in one place.
+        display: ['Inter'],
+        'display-semibold': ['Inter-SemiBold'],
+        'display-bold': ['Inter-Bold'],
         // UI sans (Inter)
         sans: ['Inter'],
         'sans-medium': ['Inter-Medium'],

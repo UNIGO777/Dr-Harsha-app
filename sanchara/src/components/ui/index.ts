@@ -5,4 +5,5 @@ export { Input } from './Input';
 export { OtpInput } from './OtpInput';
 export { ProgressBar } from './ProgressBar';
 export { TextComposer } from './TextComposer';
+export { ScreenHeader } from './ScreenHeader';
 export { ThemePicker } from './ThemePicker';

@@ -1,5 +1,5 @@
 // Root layout — wires the whole app's providers and holds the splash screen up
-// until the design fonts (Fraunces + Inter) are ready.
+// until the design font (Inter) is ready.
 //
 // Provider order (outermost first):
 //   GestureHandlerRootView  → required by reanimated/gestures/navigation
@@ -90,6 +90,8 @@ export default function RootLayout() {
               <Stack.Screen name="(onboarding)" />
               <Stack.Screen name="(programs)" />
               <Stack.Screen name="(app)" />
+              <Stack.Screen name="(session)" />
+              <Stack.Screen name="(profile)" />
             </Stack>
           </QueryClientProvider>
         </SafeAreaProvider>

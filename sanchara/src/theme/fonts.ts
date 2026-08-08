@@ -5,13 +5,11 @@
  * layout so the splash screen stays up until every weight is ready.
  *
  * We only register the weights the design system actually uses — keeping the
- * bundle lean rather than loading all nine Fraunces / Inter weights.
+ * bundle lean rather than loading all nine Inter weights.
+ *
+ * Inter is the app's ONLY face; the headline tier is the same font at a heavier
+ * weight (see `fonts` in tokens.ts).
  */
-import {
-  Fraunces_400Regular,
-  Fraunces_600SemiBold,
-  Fraunces_700Bold,
-} from '@expo-google-fonts/fraunces';
 import {
   Inter_400Regular,
   Inter_500Medium,
@@ -20,11 +18,6 @@ import {
 } from '@expo-google-fonts/inter';
 
 export const fontMap = {
-  // Fraunces — display serif
-  Fraunces: Fraunces_400Regular,
-  'Fraunces-SemiBold': Fraunces_600SemiBold,
-  'Fraunces-Bold': Fraunces_700Bold,
-  // Inter — UI sans
   Inter: Inter_400Regular,
   'Inter-Medium': Inter_500Medium,
   'Inter-SemiBold': Inter_600SemiBold,

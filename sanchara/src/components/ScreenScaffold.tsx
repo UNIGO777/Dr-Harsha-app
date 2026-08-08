@@ -1,6 +1,6 @@
 /**
  * Dev placeholder scaffold for not-yet-built route screens. Keeps every stub
- * on-theme (base background, Fraunces title, Inter meta) so the navigation
+ * on-theme (base background, Inter throughout) so the navigation
  * skeleton is visually coherent while feature work lands screen by screen.
  */
 import { View, Text } from 'react-native';

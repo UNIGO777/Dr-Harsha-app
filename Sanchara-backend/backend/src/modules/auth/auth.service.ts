@@ -263,9 +263,14 @@ export interface MyProfile {
   email?: string;
   age?: number;
   gender?: Gender;
+  heightCm?: number;
+  weightKg?: number;
   goal?: string;
   conditions: string[];
   painAreas: string[];
+  surgeryHistory?: string;
+  exerciseHistory?: ExerciseHistoryLevel;
+  preferredTime?: string;
   group?: UserGroup;
   level: number;
   accountStatus: AccountStatus;
@@ -273,6 +278,7 @@ export interface MyProfile {
   entitled: boolean;
   bmi?: number;
   weeklyActivity: { currentMinutes: number; weekStartDate?: Date };
+  memberSince?: Date;
 }
 
 /**
@@ -290,9 +296,14 @@ export async function getMyProfile(userId: string): Promise<MyProfile | null> {
     email: user.email,
     age: user.age,
     gender: user.gender,
+    heightCm: user.heightCm,
+    weightKg: user.weightKg,
     goal: user.goal,
     conditions: user.conditions ?? [],
     painAreas: user.painAreas ?? [],
+    surgeryHistory: user.surgeryHistory,
+    exerciseHistory: user.exerciseHistory,
+    preferredTime: user.preferredTime,
     group: user.group,
     level: user.level,
     accountStatus: user.accountStatus,
@@ -303,7 +314,63 @@ export async function getMyProfile(userId: string): Promise<MyProfile | null> {
       currentMinutes: user.weeklyActivity?.currentMinutes ?? 0,
       weekStartDate: user.weeklyActivity?.weekStartDate,
     },
+    memberSince: user.createdAt,
   };
+}
+
+/**
+ * Fields a patient may change about themselves.
+ *
+ * Deliberately EXCLUDES everything clinical or commercial — group, level,
+ * accountStatus, trial dates, entitlement, phone. Those are assigned by
+ * onboarding or staff; letting the app PATCH them would hand a patient their
+ * own difficulty tier and billing state.
+ */
+export interface UpdateMyProfileInput {
+  name?: string;
+  email?: string;
+  age?: number;
+  gender?: Gender;
+  heightCm?: number;
+  weightKg?: number;
+  goal?: string;
+  conditions?: string[];
+  painAreas?: string[];
+  surgeryHistory?: string;
+  exerciseHistory?: ExerciseHistoryLevel;
+  preferredTime?: string;
+}
+
+export async function updateMyProfile(
+  userId: string,
+  input: UpdateMyProfileInput
+): Promise<MyProfile | null> {
+  const user: HydratedDocument<IUser> | null = await User.findById(userId);
+  if (!user) return null;
+
+  // Assign only what was sent, so an omitted key never blanks a stored value.
+  for (const [key, value] of Object.entries(input)) {
+    if (value === undefined) continue;
+    (user as unknown as Record<string, unknown>)[key] = value;
+  }
+
+  // Keep the weight trail in step with the current value — the clinician's
+  // weight chart reads this log, not just the latest number.
+  if (input.weightKg !== undefined) {
+    user.weightLog = [...(user.weightLog ?? []), { valueKg: input.weightKg, date: new Date() }];
+  }
+
+  // `bmi` and `maxHr` are derived by the User pre-save hook.
+  await user.save();
+
+  if (input.weightKg !== undefined || input.heightCm !== undefined) {
+    if (typeof user.bmi === 'number') {
+      user.bmiHistory = [...(user.bmiHistory ?? []), { value: user.bmi, date: new Date() }];
+      await user.save();
+    }
+  }
+
+  return getMyProfile(userId);
 }
 
 export interface RecommendationProfile {

@@ -8,7 +8,7 @@
  *
  * `phone` must be E.164-ish (backend regex /^\+?[1-9]\d{9,14}$/), e.g. "+919876543210".
  */
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/api/client';
 import { endpoints } from '@/api/endpoints';
@@ -22,9 +22,14 @@ export interface MyProfile {
   email?: string;
   age?: number;
   gender?: 'male' | 'female' | 'other';
+  heightCm?: number;
+  weightKg?: number;
   goal?: string;
   conditions: string[];
   painAreas: string[];
+  surgeryHistory?: string;
+  exerciseHistory?: 'none' | 'beginner' | 'intermediate' | 'advanced';
+  preferredTime?: string;
   group?: 'GROUP_1' | 'GROUP_2' | 'WAITLIST';
   /** Difficulty attribute only — NOT the progression driver (that's enrollment levels). */
   level: number;
@@ -34,7 +39,28 @@ export interface MyProfile {
   entitled: boolean;
   bmi?: number;
   weeklyActivity: { currentMinutes: number; weekStartDate?: string };
+  /** Account creation date — "member since" on the profile. */
+  memberSince?: string;
 }
+
+/** The subset of the profile a patient may change (PATCH /auth/me). */
+export type UpdateMyProfileInput = Partial<
+  Pick<
+    MyProfile,
+    | 'name'
+    | 'email'
+    | 'age'
+    | 'gender'
+    | 'heightCm'
+    | 'weightKg'
+    | 'goal'
+    | 'conditions'
+    | 'painAreas'
+    | 'surgeryHistory'
+    | 'exerciseHistory'
+    | 'preferredTime'
+  >
+>;
 
 export function useMe(enabled = true) {
   return useQuery({
@@ -43,6 +69,27 @@ export function useMe(enabled = true) {
     queryFn: async () => {
       const { data } = await api.get<{ user: MyProfile }>(endpoints.auth.me);
       return data.user;
+    },
+  });
+}
+
+/**
+ * Patient self-service profile edit. The server returns the FULL refreshed
+ * profile, so the cache is replaced with the authoritative version rather than
+ * optimistically patched — height/weight edits recompute BMI server-side, and
+ * guessing that here would show a stale number.
+ */
+export function useUpdateMe() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: UpdateMyProfileInput) => {
+      const { data } = await api.patch<{ user: MyProfile }>(endpoints.auth.me, input);
+      return data.user;
+    },
+    onSuccess: (user) => {
+      qc.setQueryData(['auth', 'me'], user);
+      // Pain areas drive the session check-in; a change must reach it.
+      qc.invalidateQueries({ queryKey: ['auth', 'me'] });
     },
   });
 }

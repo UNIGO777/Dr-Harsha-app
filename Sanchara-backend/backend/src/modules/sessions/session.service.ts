@@ -9,6 +9,7 @@ import {
   type ExerciseSessionView,
 } from '../exercises/exercise.service';
 import { getProgramDayContentById, type ProgramDayContent } from '../programs/program.service';
+import { clinicDateString } from '../../utils/clinicDate';
 import {
   advanceForCompletedDay,
   getDailyLock,
@@ -638,9 +639,15 @@ export async function getCalendar(
   month: string;
   days: { date: string; status: DayStatus; sessions: number; dayNumbers: number[] }[];
 }> {
+  // Buckets are CLINIC-local days, matching the one-session-per-day rule. A
+  // session at 02:00 IST falls on the previous UTC day, so bucketing by UTC
+  // would plot it on the wrong square and disagree with the lock the patient
+  // just saw. Widen the fetch by a day either side, then filter by clinic month.
   const start = new Date(`${month}-01T00:00:00.000Z`);
-  const end = new Date(start);
+  start.setUTCDate(start.getUTCDate() - 1);
+  const end = new Date(`${month}-01T00:00:00.000Z`);
   end.setUTCMonth(end.getUTCMonth() + 1);
+  end.setUTCDate(end.getUTCDate() + 1);
 
   const docs = await Session.find({
     user: userId,
@@ -652,7 +659,8 @@ export async function getCalendar(
     { completed: number; partial: number; other: number; dayNumbers: number[] }
   >();
   for (const s of docs) {
-    const day = (s.startedAt ?? s.createdAt).toISOString().slice(0, 10);
+    const day = clinicDateString(s.startedAt ?? s.createdAt);
+    if (!day.startsWith(`${month}-`)) continue; // trimmed by the widened window
     const cur = byDay.get(day) ?? { completed: 0, partial: 0, other: 0, dayNumbers: [] };
     if (s.completion === 'COMPLETED') cur.completed += 1;
     else if (s.completion === 'PARTIAL') cur.partial += 1;

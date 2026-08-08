@@ -7,9 +7,9 @@
  *
  * Remaining gaps:
  *  1. WALLET — the backend's Subscription model supports TRIAL/DAILY/WEEKLY/
- *     MONTHLY/QUARTERLY plans but has no wallet or ledger. These shapes are
- *     provisional so the prepaid-balance UI can be reviewed before that model is
- *     committed to.
+ *     MONTHLY/QUARTERLY plans but has no wallet or ledger. Only the SHAPE lives
+ *     here now; the provisional values moved to src/store/walletStore.ts so the
+ *     home card and the Wallet tab read one source.
  *  2. SPECIALIST — consultation booking isn't built yet, so the clinician card
  *     is static.
  */
@@ -22,18 +22,15 @@ export interface HomeWallet {
   autoRechargeAmount: number;
 }
 
-/** TODO: replace with GET /wallet once the wallet module exists. */
-export const wallet: HomeWallet = {
-  balanceInr: 450,
-  estimatedDaysRemaining: 12,
-  lowBalance: false,
-  autoRecharge: true,
-  autoRechargeAmount: 500,
-};
-
-/** TODO: replace with the consultations module when it lands. */
+/**
+ * The clinician behind the programme. Static until the consultations module
+ * lands — only the booking ACTION needs a backend, not who is on the card.
+ *
+ * The portrait is a bundled asset (not a URL), so it renders instantly and
+ * offline; `require` hands expo-image a local module id.
+ */
 export const specialist = {
-  name: 'Dr. Harsha S.',
-  title: 'Spinal Health Specialist',
-  avatarUrl: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=200&q=80',
+  name: 'Dr. Harsha KJ',
+  title: 'Lifestyle & Prevention Centre',
+  avatar: require('../../assets/images/dr-harsha.png') as number,
 };

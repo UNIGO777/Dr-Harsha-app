@@ -3,7 +3,7 @@
  * real clinician is behind the program and offers the consultation booking
  * entry point.
  */
-import { Image } from 'expo-image';
+import { Image, type ImageSource } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import { Pressable, Text, View } from 'react-native';
 
@@ -12,17 +12,18 @@ import { useThemeColors } from '@/theme/useTheme';
 interface SpecialistCardProps {
   name: string;
   title: string;
-  avatarUrl: string;
+  /** Bundled asset (require) or a remote URL. */
+  avatar: ImageSource | string | number;
   onBook: () => void;
 }
 
-export function SpecialistCard({ name, title, avatarUrl, onBook }: SpecialistCardProps) {
+export function SpecialistCard({ name, title, avatar, onBook }: SpecialistCardProps) {
   const colors = useThemeColors();
   return (
     <View className="flex-row items-center rounded-card border border-border bg-surface p-4">
       <Image
-        source={{ uri: avatarUrl }}
-        style={{ width: 48, height: 48, borderRadius: 999, backgroundColor: colors.inputFill }}
+        source={avatar}
+        style={{ width: 52, height: 52, borderRadius: 999, backgroundColor: colors.inputFill }}
         contentFit="cover"
         transition={300}
       />

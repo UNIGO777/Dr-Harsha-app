@@ -8,5 +8,6 @@ export { WalletCard } from './WalletCard';
 export { InsightCard } from './InsightCard';
 export { QuickSessionsRow } from './QuickSessionsRow';
 export { SpecialistCard } from './SpecialistCard';
+export { BookConsultationSheet } from './BookConsultationSheet';
 export { SectionHeader } from './SectionHeader';
 export { StickyHeader } from './StickyHeader';

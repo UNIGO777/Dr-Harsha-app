@@ -293,3 +293,34 @@ export function useAbandonSession() {
     },
   });
 }
+
+/** Mirrors the backend's HistoryCard exactly — see sessions/session.service.ts. */
+export interface HistoryCard {
+  id: string;
+  /** endedAt, falling back to startedAt. */
+  date?: string;
+  levelNumber?: number;
+  dayNumber?: number;
+  durationSeconds: number;
+  completion?: SessionCompletion;
+  avgEaseScore?: number;
+  programType?: ProgramType;
+  shortProgramTag?: string;
+}
+
+/**
+ * Completed/partial sessions, newest first. The profile only needs the total,
+ * so it asks for a single row — `pagination.total` is the real payload.
+ */
+export function useSessionHistory(limit = 1) {
+  return useQuery({
+    queryKey: ['sessions', 'history', limit],
+    queryFn: async () => {
+      const { data } = await api.get<{
+        data: HistoryCard[];
+        pagination: { page: number; limit: number; total: number; totalPages: number };
+      }>(endpoints.sessions.history, { params: { page: 1, limit } });
+      return data;
+    },
+  });
+}

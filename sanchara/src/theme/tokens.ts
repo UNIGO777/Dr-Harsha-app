@@ -185,12 +185,17 @@ export const spacing = {
 /**
  * Font family names. These strings are the keys we register with expo-font in
  * the root layout, and they match the `fontFamily` utilities in tailwind.config.
+ *
+ * ONE family — Inter — across the whole app. The `display` tier is kept as a
+ * separate name because it carries meaning ("this is a heading") in ~44 places;
+ * it just resolves to Inter now rather than a display serif. Changing the
+ * headline face later is a one-line edit here plus the matching tailwind block.
  */
 export const fonts = {
-  /** Fraunces — display serif: headlines, wordmark, numbers. */
-  display: 'Fraunces',
-  displaySemiBold: 'Fraunces-SemiBold',
-  displayBold: 'Fraunces-Bold',
+  /** Headline tier — same face as the UI text, distinguished by weight/size. */
+  display: 'Inter',
+  displaySemiBold: 'Inter-SemiBold',
+  displayBold: 'Inter-Bold',
   /** Inter — UI sans: labels, inputs, buttons, meta. */
   ui: 'Inter',
   uiMedium: 'Inter-Medium',

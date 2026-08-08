@@ -88,3 +88,18 @@ export async function logout(
     next(err);
   }
 }
+
+/** PATCH /auth/me — patient self-service profile edit. */
+export async function updateMe(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    if (!req.user) throw ApiError.unauthorized('Not authenticated');
+    const profile = await authService.updateMyProfile(
+      req.user.userId,
+      req.body as authService.UpdateMyProfileInput
+    );
+    if (!profile) throw ApiError.notFound('User not found');
+    res.status(200).json({ success: true, user: profile });
+  } catch (err) {
+    next(err);
+  }
+}

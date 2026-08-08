@@ -9,6 +9,7 @@ import {
   verifyOtpSchema,
   refreshSchema,
   logoutSchema,
+  updateMyProfileSchema,
 } from './auth.validation';
 
 /**
@@ -56,7 +57,13 @@ router.post('/refresh', validate({ body: refreshSchema }), authController.refres
 
 router.post('/logout', validate({ body: logoutSchema }), authController.logout);
 
-// The only authenticated route in this module — returns the caller's profile.
+// The authenticated routes in this module — the caller's own profile.
 router.get('/me', authenticate, authController.me);
+router.patch(
+  '/me',
+  authenticate,
+  validate({ body: updateMyProfileSchema }),
+  authController.updateMe
+);
 
 export default router;
