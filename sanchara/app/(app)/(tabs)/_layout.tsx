@@ -8,11 +8,19 @@
 // ~70px per label, and the longer word truncates.
 import { Tabs } from 'expo-router';
 import { Bell, CalendarCheck, LineChart, UserRound, Wallet } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useThemeColors } from '@/theme/useTheme';
 
+const TAB_BAR_HEIGHT = 64;
+
 export default function TabsLayout() {
   const colors = useThemeColors();
+  // Edge-to-edge is on by default from SDK 55 (and mandatory on Android 15+),
+  // so the app draws UNDER the system bars. Without adding the bottom inset the
+  // gesture bar sits on top of the tab bar and swallows the labels.
+  const insets = useSafeAreaInsets();
+
   return (
     <Tabs
       screenOptions={{
@@ -22,8 +30,12 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
-          height: 64,
+          // Grow the bar by the inset and pad the content up out of it, so the
+          // icons+labels keep their full height on gesture-nav and 3-button
+          // devices alike (insets.bottom is 0 where there is no system bar).
+          height: TAB_BAR_HEIGHT + insets.bottom,
           paddingTop: 6,
+          paddingBottom: insets.bottom,
         },
         tabBarLabelStyle: {
           fontFamily: 'Inter-SemiBold',

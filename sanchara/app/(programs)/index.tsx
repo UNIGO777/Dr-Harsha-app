@@ -7,7 +7,7 @@ import { useRouter } from 'expo-router';
 import { Play } from 'lucide-react-native';
 import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ProgramCard } from '@/components/programs/ProgramCard';
 import { ProgramsHeader } from '@/components/programs/ProgramsHeader';
@@ -61,6 +61,7 @@ function RecommendedHero({ rec, onPress }: { rec: Recommendation; onPress: () =>
 
 export default function ProgramSelectScreen() {
   const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const recommended = useRecommendedPrograms();
   const list = useProgramsInfinite(12);
@@ -152,7 +153,12 @@ export default function ProgramSelectScreen() {
         keyExtractor={(p) => p.id}
         renderItem={({ item }) => <ProgramCard program={item} onPress={() => open(item.id)} />}
         ListHeaderComponent={Header}
-        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: 40, gap: 16 }}
+        contentContainerStyle={{
+          paddingHorizontal: 24,
+          paddingTop: 12,
+          paddingBottom: insets.bottom + 40,
+          gap: 16,
+        }}
         showsVerticalScrollIndicator={false}
         onEndReached={onEndReached}
         onEndReachedThreshold={0.6}
