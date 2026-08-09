@@ -4,6 +4,7 @@ import { User, type IUser } from '../../models/user.model';
 import { Otp } from './otp.model';
 import { RefreshToken } from './refreshToken.model';
 import { ApiError } from '../../utils/ApiError';
+import { logger } from '../../utils/logger';
 import {
   signAccessToken,
   signRefreshToken,
@@ -11,7 +12,7 @@ import {
   verifyRefreshToken,
 } from '../../utils/jwt';
 import { sendOtpSms } from '../../services/sms.service';
-import { isProd } from '../../config/env';
+import { env, isProd } from '../../config/env';
 import type {
   AccountStatus,
   Gender,
@@ -26,9 +27,14 @@ import type { HydratedDocument } from 'mongoose';
  * that touches the User model; other modules must call these functions.
  */
 
-const OTP_LENGTH_MIN = 100000; // inclusive
-const OTP_LENGTH_MAX = 1000000; // exclusive -> always 6 digits
-const OTP_TTL_MINUTES = 5;
+/**
+ * OTP length and lifetime come from env (OTP_LENGTH / OTP_TTL_SECONDS) so the
+ * server and the SMS template are driven by ONE setting — the Fast2SMS payload
+ * derives its `otp_length` / `otp_expiry` from these same values.
+ */
+const OTP_MIN_INCLUSIVE = 10 ** (env.OTP_LENGTH - 1);
+const OTP_MAX_EXCLUSIVE = 10 ** env.OTP_LENGTH;
+const OTP_TTL_MS = env.OTP_TTL_SECONDS * 1000;
 const OTP_MAX_ATTEMPTS = 5;
 const BCRYPT_ROUNDS = 10;
 const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -52,9 +58,9 @@ export type VerifyOtpResult =
  *          login. The caller must respect the same gate.
  */
 export async function requestOtp(phone: string): Promise<string | undefined> {
-  const otp = randomInt(OTP_LENGTH_MIN, OTP_LENGTH_MAX).toString();
+  const otp = randomInt(OTP_MIN_INCLUSIVE, OTP_MAX_EXCLUSIVE).toString();
   const otpHash = await bcrypt.hash(otp, BCRYPT_ROUNDS);
-  const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000);
+  const expiresAt = new Date(Date.now() + OTP_TTL_MS);
 
   await Otp.findOneAndUpdate(
     { phone },
@@ -62,8 +68,16 @@ export async function requestOtp(phone: string): Promise<string | undefined> {
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
 
-  // MOCK delivery — real SMS provider slots in behind this call later.
-  await sendOtpSms(phone, otp, OTP_TTL_MINUTES);
+  // Real delivery via Fast2SMS when configured; mock (logged) otherwise.
+  // A send failure must NOT leave a usable OTP row behind: the user would be
+  // told "code sent" with nothing to enter, and the row would block retries.
+  try {
+    await sendOtpSms(phone, otp);
+  } catch (err) {
+    await Otp.deleteOne({ phone });
+    logger.error(`requestOtp: delivery failed for ${phone}`);
+    throw ApiError.internal('Could not send the verification code. Please try again.');
+  }
 
   return isProd ? undefined : otp;
 }

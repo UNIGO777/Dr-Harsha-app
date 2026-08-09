@@ -3,12 +3,15 @@ import { createApp } from './app';
 import { env } from './config/env';
 import { connectDB, disconnectDB } from './config/db';
 import { logger } from './utils/logger';
+import { assertSmsReady } from './services/sms.service';
 
 /**
  * Application entrypoint.
  *
- * Boot order: validate env (on import of ./config/env) → connect to MongoDB →
- * start the HTTP server. We do NOT accept traffic before the DB is up.
+ * Boot order: validate env (on import of ./config/env) → check the SMS provider
+ * → connect to MongoDB → start the HTTP server. We do NOT accept traffic before
+ * the DB is up, nor (in production) without a real SMS provider — OTP is the
+ * only way in, so a silently-mocked one means nobody can log in.
  * Handles graceful shutdown on SIGINT/SIGTERM and crashes loudly on
  * unhandled rejections / uncaught exceptions.
  */
@@ -37,10 +40,13 @@ async function shutdown(signal: string, exitCode = 0): Promise<void> {
 }
 
 async function bootstrap(): Promise<void> {
-  // 1. Database first — fail fast if it's unreachable.
+  // 1. Refuse to boot production without real SMS — cheapest check, do it first.
+  assertSmsReady();
+
+  // 2. Database — fail fast if it's unreachable.
   await connectDB();
 
-  // 2. Then start listening.
+  // 3. Then start listening.
   const app = createApp();
   server = app.listen(env.PORT, () => {
     logger.info(

@@ -30,6 +30,20 @@ const envSchema = z.object({
   JWT_ACCESS_EXPIRY: z.string().min(1).default('15m'),
   JWT_REFRESH_EXPIRY: z.string().min(1).default('7d'),
 
+  // ── OTP ───────────────────────────────────────────────────────────────────
+  // The SERVER owns the code's length and lifetime. Fast2SMS is told these
+  // values so its template renders the right copy — it never sets them. A
+  // separate FAST2SMS_OTP_EXPIRY / _LENGTH would let the SMS advertise a
+  // validity window the server does not honour, so those knobs do not exist.
+  OTP_LENGTH: z.coerce.number().int().min(4).max(8).default(6),
+  OTP_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(300),
+
+  // ── SMS (Fast2SMS) ────────────────────────────────────────────────────────
+  // Optional so local dev boots without credentials and falls back to the mock
+  // provider. In PRODUCTION their absence is fatal — see assertSmsReady().
+  FAST2SMS_API_KEY: z.string().min(1).optional(),
+  FAST2SMS_OTP_ID: z.string().min(1).optional(),
+
   // Email (SMTP) — optional in local phase, mocked if absent
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().int().positive().optional(),
