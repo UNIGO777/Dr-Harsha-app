@@ -173,7 +173,7 @@ export async function updateProgram(
   const program = await Program.findByIdAndUpdate(
     id,
     { $set: input },
-    { new: true, runValidators: true }
+    { returnDocument: 'after', runValidators: true }
   );
   if (!program) throw ApiError.notFound('Program not found');
   return toSummary(program);
@@ -183,7 +183,7 @@ export async function setPublished(id: string, isPublished: boolean): Promise<Pr
   const program = await Program.findByIdAndUpdate(
     id,
     { $set: { isPublished } },
-    { new: true }
+    { returnDocument: 'after' }
   );
   if (!program) throw ApiError.notFound('Program not found');
   return toSummary(program);
@@ -363,7 +363,7 @@ export async function updateDay(
     const day = await ProgramDay.findOneAndUpdate(
       { _id: dayId, program: programId },
       { $set: update },
-      { new: true, runValidators: true }
+      { returnDocument: 'after', runValidators: true }
     );
     if (!day) throw ApiError.notFound('Program day not found');
     return hydrateAdminDay(day);

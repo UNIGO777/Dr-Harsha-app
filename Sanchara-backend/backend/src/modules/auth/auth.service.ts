@@ -65,7 +65,7 @@ export async function requestOtp(phone: string): Promise<string | undefined> {
   await Otp.findOneAndUpdate(
     { phone },
     { phone, otpHash, expiresAt, attempts: 0 },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
+    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
   );
 
   // Real delivery via Fast2SMS when configured; mock (logged) otherwise.

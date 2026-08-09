@@ -103,7 +103,7 @@ async function upsertProgram(
   const program = await Program.findOneAndUpdate(
     query,
     { $set: set },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
+    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
   );
   return program!._id;
 }
