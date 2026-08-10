@@ -156,6 +156,7 @@ The core flow. Test carefully.
 |---|---|---|
 | A5.1.1 | Tap **Start today's session** | Pain check-in appears first |
 | A5.1.2 | Check which areas are listed | Exactly the pain areas from your profile |
+| A5.1.2b | **Account that skipped pain areas at onboarding** | A single **"Overall"** row. This is the intended fallback — and the session must **start successfully** from it |
 | A5.1.3 | Try to continue without rating everything | Button disabled; "Rate every area to continue" |
 | A5.1.4 | Rate everything **low (0–3)** and start | Session starts, first video plays |
 | A5.1.5 | **Rate any area 8, 9 or 10** and start | ⚠️ **Blocked.** A safety screen appears advising rest, with "Rest today" and "Start anyway" |

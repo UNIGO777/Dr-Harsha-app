@@ -49,6 +49,12 @@ const TRANSITIONS: Record<SessionState, SessionState[]> = {
 
 const TERMINAL_STATES: SessionState[] = ['COMPLETED', 'ABANDONED'];
 
+/**
+ * Fallback check-in area for patients with no specific pain areas on file.
+ * MUST match the string the app sends (sanchara app/(session)/checkin.tsx).
+ */
+export const OVERALL_PAIN_AREA = 'Overall';
+
 // Pain score at/above which we block auto-start.
 // TODO: CONFIRM pain threshold (>=8) WITH DR. HARSHA
 const SAFETY_THRESHOLD = 8;
@@ -185,8 +191,12 @@ export async function startSession(
   const ctx = await getSessionStartContext(userId);
   if (!ctx) throw ApiError.notFound('User not found');
 
-  // Pain check-in areas must correspond to the user's profile pain areas.
-  const profileAreas = new Set(ctx.painAreas);
+  // Pain check-in areas must correspond to the user's profile pain areas —
+  // except OVERALL_PAIN_AREA, which the app offers to patients who listed no
+  // specific areas during onboarding. Without this exemption those patients
+  // (a large share of real signups) can never start a session at all: the app
+  // shows them "Overall", and the server rejects the only answer they can give.
+  const profileAreas = new Set([...ctx.painAreas, OVERALL_PAIN_AREA]);
   const foreign = input.painCheckin.filter((p) => !profileAreas.has(p.area));
   if (foreign.length > 0) {
     throw ApiError.badRequest(

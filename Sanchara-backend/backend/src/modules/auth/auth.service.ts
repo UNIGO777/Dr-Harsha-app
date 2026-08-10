@@ -167,6 +167,17 @@ export async function rotateRefreshToken(token: string): Promise<AuthTokens> {
     throw ApiError.unauthorized('Refresh token is no longer valid');
   }
 
+  // The token record can outlive the account it belongs to — deleting a user
+  // row does not delete their refresh tokens. Without this check a deleted (or
+  // locked) account keeps minting fresh access tokens indefinitely, and the app
+  // never learns the session is dead.
+  const user = await User.findById(payload.userId).select('accountStatus');
+  if (!user || user.accountStatus === 'locked') {
+    // Burn every token this user holds, not just the presented one.
+    await RefreshToken.updateMany({ user: payload.userId }, { revoked: true });
+    throw ApiError.unauthorized('Session is no longer valid. Please sign in again.');
+  }
+
   // Rotation: revoke the old token before issuing a new one.
   record.revoked = true;
   await record.save();
