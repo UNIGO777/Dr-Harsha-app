@@ -5,5 +5,6 @@ export { Input } from './Input';
 export { OtpInput } from './OtpInput';
 export { ProgressBar } from './ProgressBar';
 export { TextComposer } from './TextComposer';
+export { ErrorState, errorStatus, isAuthError } from './ErrorState';
 export { ScreenHeader } from './ScreenHeader';
 export { ThemePicker } from './ThemePicker';

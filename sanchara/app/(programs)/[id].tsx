@@ -7,7 +7,7 @@ import { Alert, ActivityIndicator, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ProgramsHeader } from '@/components/programs/ProgramsHeader';
-import { Button } from '@/components/ui';
+import { Button, ErrorState } from '@/components/ui';
 import { isActiveEnrollmentConflict, useEnroll } from '@/features/enrollments/api';
 import {
   useProgram,
@@ -190,7 +190,7 @@ export default function ProgramDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { data: program, isLoading } = useProgram(id);
+  const { data: program, isLoading, isError, error, refetch } = useProgram(id);
   const enroll = useEnroll();
 
   async function start(switchExisting?: boolean) {
@@ -214,10 +214,27 @@ export default function ProgramDetailScreen() {
     }
   }
 
-  if (isLoading || !program) {
+  if (isLoading) {
     return (
       <View className="flex-1 items-center justify-center bg-base">
         <ActivityIndicator color={colors.accent} />
+      </View>
+    );
+  }
+
+  // Without this, a failed load left `isLoading` false and `program` undefined
+  // — the old `isLoading || !program` guard then span forever with no way out.
+  if (isError || !program) {
+    return (
+      <View className="flex-1 bg-base">
+        <SafeAreaView edges={['top']}>
+          <ProgramsHeader title="Programs" onBack={() => router.back()} />
+        </SafeAreaView>
+        <ErrorState
+          error={error}
+          onRetry={() => void refetch()}
+          title="We couldn't load this programme"
+        />
       </View>
     );
   }

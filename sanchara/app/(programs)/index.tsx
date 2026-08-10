@@ -11,7 +11,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { ProgramCard } from '@/components/programs/ProgramCard';
 import { ProgramsHeader } from '@/components/programs/ProgramsHeader';
-import { Chip } from '@/components/ui';
+import { Chip, ErrorState } from '@/components/ui';
 import { resolveThumbnail } from '@/lib/media';
 import {
   useProgramsInfinite,
@@ -97,6 +97,10 @@ export default function ProgramSelectScreen() {
   }, [list]);
 
   const initialLoading = recommended.isLoading || list.isLoading;
+  // "No programs found. Try a different filter." is actively wrong when the
+  // request failed — and this screen gates enrolment, so a patient who believes
+  // it has no way into the app at all.
+  const failed = recommended.isError || list.isError;
 
   const Header = (
     <View>
@@ -139,6 +143,24 @@ export default function ProgramSelectScreen() {
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator color={colors.accent} />
         </View>
+      </View>
+    );
+  }
+
+  if (failed) {
+    return (
+      <View className="flex-1 bg-base">
+        <SafeAreaView edges={['top']}>
+          <ProgramsHeader title="Programs" />
+        </SafeAreaView>
+        <ErrorState
+          error={recommended.error ?? list.error}
+          onRetry={() => {
+            void recommended.refetch();
+            void list.refetch();
+          }}
+          title="We couldn't load your programmes"
+        />
       </View>
     );
   }

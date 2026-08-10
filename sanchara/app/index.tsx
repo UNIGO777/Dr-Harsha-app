@@ -1,10 +1,9 @@
 // Landing / get-started screen. Also the launch gate: onboarded users skip to
 // the app, mid-onboarding users resume onboarding, everyone else sees this.
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { Activity } from 'lucide-react-native';
-import { useEffect } from 'react';
-import { View, Text } from 'react-native';
+import { ActivityIndicator, View, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui';
@@ -18,14 +17,23 @@ export default function Index() {
   const status = useAuthStore((s) => s.status);
 
   // Gate on the hydrated session (see authStore.hydrate in the root layout).
-  // Navigate from an effect (never during render) so we don't update navigation
-  // state before the navigator has mounted.
-  useEffect(() => {
-    if (status === 'authenticated') router.replace('/(app)/(tabs)/home');
-    else if (status === 'onboarding') router.replace('/(onboarding)/welcome');
-  }, [status, router]);
+  //
+  // DECLARATIVE, not an effect. This is the root route, so anything that pops
+  // back here — an Android back press out of a nested flow, say — lands on it
+  // again. An effect-driven redirect only fires on mount, so the screen would
+  // render nothing and strand the user on a blank white page. <Redirect/> is
+  // re-evaluated on every render and cannot get stuck.
+  if (status === 'authenticated') return <Redirect href="/(app)/(tabs)/home" />;
+  if (status === 'onboarding') return <Redirect href="/(onboarding)/welcome" />;
 
-  if (status !== 'unauthenticated') return null; // blank while idle / redirecting
+  // Session not resolved yet — show something, never a blank screen.
+  if (status !== 'unauthenticated') {
+    return (
+      <View className="flex-1 items-center justify-center bg-base">
+        <ActivityIndicator color={colors.accent} />
+      </View>
+    );
+  }
 
   return (
     <View className="flex-1 bg-base">

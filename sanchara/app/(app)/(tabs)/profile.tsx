@@ -14,7 +14,7 @@ import { ActivityIndicator, Alert, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Row, Section } from '@/components/profile/Rows';
-import { Button, ScreenHeader, ThemePicker } from '@/components/ui';
+import { Button, ErrorState, ScreenHeader, ThemePicker } from '@/components/ui';
 import { useMe } from '@/features/auth/api';
 import { useMyEnrollment } from '@/features/enrollments/api';
 import { useSessionHistory } from '@/features/sessions/api';
@@ -92,6 +92,21 @@ export default function ProfileScreen() {
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator color={colors.accent} />
         </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Without this the screen rendered every row as "—", which reads as "we have
+  // no data about you" rather than "we couldn't reach the server".
+  if (me.isError || !me.data) {
+    return (
+      <SafeAreaView className="flex-1 bg-base" edges={['top']}>
+        <ScreenHeader title="Profile" />
+        <ErrorState
+          error={me.error}
+          onRetry={() => void me.refetch()}
+          title="We couldn't load your profile"
+        />
       </SafeAreaView>
     );
   }

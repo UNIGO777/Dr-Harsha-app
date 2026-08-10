@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { MonthGrid } from '@/components/progress/MonthGrid';
 import { TrendChart } from '@/components/progress/TrendChart';
-import { ScreenHeader } from '@/components/ui';
+import { ErrorState, ScreenHeader } from '@/components/ui';
 import { useMe } from '@/features/auth/api';
 import { useCalendar, useSessionHistory, useTrends } from '@/features/sessions/api';
 import { useThemeColors } from '@/theme/useTheme';
@@ -128,6 +128,9 @@ export default function ProgressScreen() {
   );
 
   const loading = me.isPending || trends.isPending || history.isPending;
+  // An empty state and a failed load look identical from `data` alone — saying
+  // "Nothing to show yet" when the request failed is a lie with no way out.
+  const failed = me.isError || trends.isError || history.isError;
   const refreshing = calendar.isFetching || trends.isFetching || history.isFetching;
 
   function refetchAll() {
@@ -144,6 +147,19 @@ export default function ProgressScreen() {
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator color={colors.accent} />
         </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (failed) {
+    return (
+      <SafeAreaView className="flex-1 bg-base" edges={['top']}>
+        <ScreenHeader title="Progress" />
+        <ErrorState
+          error={me.error ?? trends.error ?? history.error}
+          onRetry={refetchAll}
+          title="We couldn't load your progress"
+        />
       </SafeAreaView>
     );
   }

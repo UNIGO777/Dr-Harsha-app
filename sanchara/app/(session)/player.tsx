@@ -15,15 +15,15 @@
  * it would add two round-trips per exercise without changing what the patient
  * sees or what the records contain.
  */
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Check, ChevronLeft, VideoOff } from 'lucide-react-native';
-import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, BackHandler, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { RatingScale } from '@/components/session/RatingScale';
 import { VideoStage } from '@/components/session/VideoStage';
-import { Button } from '@/components/ui';
+import { Button, ErrorState } from '@/components/ui';
 import {
   useAbandonSession,
   useActiveSession,
@@ -41,7 +41,7 @@ export default function SessionPlayerScreen() {
   const colors = useThemeColors();
   const router = useRouter();
 
-  const { data: active, isPending } = useActiveSession();
+  const { data: active, isPending, isError, error, refetch } = useActiveSession();
   const advanceState = useAdvanceState();
   const completeExercise = useCompleteExercise();
   const completeSession = useCompleteSession();
@@ -131,12 +131,42 @@ export default function SessionPlayerScreen() {
     ]);
   }
 
+  // Android's back button/gesture is NOT covered by the layout's
+  // `gestureEnabled: false` — that only blocks the iOS swipe. Left alone it
+  // pops the screen straight out, skipping the confirmation and leaving the
+  // session open on the server, so route it through the same guard.
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        confirmQuit();
+        return true; // handled — do not pop
+      });
+      return () => sub.remove();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [session?.sessionId]),
+  );
+
   // ── Loading / no session ───────────────────────────────────────────────────
   if (isPending) {
     return (
       <View className="flex-1 items-center justify-center bg-base">
         <ActivityIndicator color={colors.accent} />
       </View>
+    );
+  }
+
+  // A failed load is NOT "you have no session" — telling a patient mid-workout
+  // that their session is gone, when the server was merely unreachable, invites
+  // them to start over and lose their place.
+  if (isError) {
+    return (
+      <SafeAreaView className="flex-1 bg-base">
+        <ErrorState
+          error={error}
+          onRetry={() => void refetch()}
+          title="We couldn't load your session"
+        />
+      </SafeAreaView>
     );
   }
 
