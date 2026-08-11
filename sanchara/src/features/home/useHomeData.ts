@@ -254,6 +254,14 @@ export function useHomeData() {
     hasEnrollment,
     today: todayQuery.data ?? null,
     program: programQuery.data ?? null,
+    /**
+     * The level roadmap is built from the PROGRAM DETAIL, not the enrollment.
+     * When that request fails, `levels` is empty and looks identical to a flat
+     * programme — so the "Your journey" section silently vanished with nothing
+     * to say why. These let the screen tell the two apart.
+     */
+    levelsUnavailable: programQuery.isError,
+    retryProgram: () => void programQuery.refetch(),
     levels,
     currentLevel,
     /** Null only when the user has no active enrollment. */

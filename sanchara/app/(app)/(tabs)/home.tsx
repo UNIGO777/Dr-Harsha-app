@@ -322,8 +322,12 @@ export default function HomeScreen() {
                 )}
               </View>
 
-              {/* Level roadmap */}
-              {home.levels.length > 0 ? (
+              {/* Level roadmap.
+                  Hidden for FLAT programmes, which genuinely have no levels —
+                  but a FAILED programme fetch also yields zero levels, and
+                  silently dropping the section there looks like a missing
+                  feature rather than a network problem. */}
+              {home.levels.length > 0 || home.levelsUnavailable ? (
                 <View className="pt-8">
                   <View className="px-5">
                     <SectionHeader
@@ -332,9 +336,29 @@ export default function HomeScreen() {
                       onAction={() => router.push('/(programs)')}
                     />
                   </View>
-                  <View className="pl-5">
-                    <JourneyRow levels={home.levels} />
-                  </View>
+                  {home.levelsUnavailable ? (
+                    <View className="px-5">
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={home.retryProgram}
+                        className="flex-row items-center rounded-card border border-border bg-surface p-4 active:opacity-80"
+                      >
+                        <Text className="flex-1 font-sans text-[13px] text-secondary">
+                          Couldn&apos;t load your levels.
+                        </Text>
+                        <Text
+                          className="font-sans-semibold text-[13px]"
+                          style={{ color: colors.accent }}
+                        >
+                          Retry
+                        </Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <View className="pl-5">
+                      <JourneyRow levels={home.levels} />
+                    </View>
+                  )}
                 </View>
               ) : null}
             </>
