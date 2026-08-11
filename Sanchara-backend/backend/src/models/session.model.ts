@@ -46,7 +46,13 @@ export interface ISession {
   shortProgramTag?: string;
 
   state: SessionState;
-  currentExerciseIndex: number; // resume pointer — survives app restarts
+  currentExerciseIndex: number;
+  /**
+   * Pain was above the gentle threshold at check-in, so loaded exercises were
+   * withheld. Stored because RESUMING must rebuild the same restricted list —
+   * recomputing from today's content would quietly hand back the hard work.
+   */
+  gentleOnly?: boolean; // resume pointer — survives app restarts
   painCheckin: IPainCheckinEntry[];
   safetyOverride: ISafetyOverride;
   exercises: ISessionExercise[];
@@ -124,6 +130,7 @@ const sessionSchema = new Schema<ISession>(
     // restarts and is NEVER auto-abandoned — the client resumes via /sessions/active.
     state: { type: String, enum: SESSION_STATES, required: true },
     currentExerciseIndex: { type: Number, default: 0, min: 0 },
+    gentleOnly: { type: Boolean, default: false },
     painCheckin: { type: [painCheckinEntrySchema], default: [] },
     safetyOverride: {
       type: safetyOverrideSchema,

@@ -47,6 +47,8 @@ export interface ActiveSessionResponse {
   session?: {
     sessionId: string;
     state: SessionState;
+    /** Session was started in gentle mode (moderate pain at check-in). */
+    gentleOnly?: boolean;
     levelNumber?: number;
     dayNumber?: number;
     programType?: ProgramType;
@@ -125,6 +127,8 @@ export interface StartSessionBlocked {
 
 export interface StartSessionStarted {
   blocked: false;
+  /** Pain was above the gentle threshold — loaded exercises were withheld. */
+  gentleOnly?: boolean;
   sessionId: string;
   state: SessionState;
   levelNumber?: number;
@@ -165,6 +169,7 @@ export function useStartSession() {
           levelNumber: result.levelNumber,
           dayNumber: result.dayNumber,
           currentExerciseIndex: result.currentExerciseIndex,
+          gentleOnly: result.gentleOnly,
           painCheckin: [],
         },
         exercises: result.exercises,
@@ -225,6 +230,15 @@ export function useCompleteExercise() {
       restTimerSeconds?: number;
       tooHard?: boolean;
       tooEasy?: boolean;
+      /** Set-by-set detail — backs the clinician's ProgressDay record. */
+      repScheme?: string;
+      restPreset?: number;
+      sets?: {
+        setNumber: number;
+        targetReps: number;
+        completedReps: number;
+        restSeconds?: number;
+      }[];
     }) => {
       const { data } = await api.post<CompleteExerciseResult>(
         endpoints.sessions.exerciseComplete(sessionId, exerciseId),

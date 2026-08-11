@@ -28,7 +28,7 @@ export interface MyProfile {
   conditions: string[];
   painAreas: string[];
   surgeryHistory?: string;
-  exerciseHistory?: 'none' | 'beginner' | 'intermediate' | 'advanced';
+  exerciseHistory?: 'none' | 'beginner' | 'sports_only' | 'intermediate' | 'advanced';
   preferredTime?: string;
   group?: 'GROUP_1' | 'GROUP_2' | 'WAITLIST';
   /** Difficulty attribute only — NOT the progression driver (that's enrollment levels). */

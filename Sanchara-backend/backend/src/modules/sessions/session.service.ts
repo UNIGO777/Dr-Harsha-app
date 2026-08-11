@@ -10,6 +10,9 @@ import {
 } from '../exercises/exercise.service';
 import { getProgramDayContentById, type ProgramDayContent } from '../programs/program.service';
 import { clinicDateString } from '../../utils/clinicDate';
+import { logger } from '../../utils/logger';
+import { ProgressDay } from '../../models/progressDay.model';
+import { DEFAULT_REP_SCHEME, DEFAULT_REST_SECONDS, REP_SCHEMES } from '../../constants/enums';
 import {
   advanceForCompletedDay,
   getDailyLock,
@@ -59,6 +62,42 @@ export const OVERALL_PAIN_AREA = 'Overall';
 // TODO: CONFIRM pain threshold (>=8) WITH DR. HARSHA
 const SAFETY_THRESHOLD = 8;
 
+/**
+ * ABOVE this pain score the session is restricted to gentle work — stretching,
+ * mobility, warm-up/cool-down — and loaded exercise is withheld. Between this
+ * and SAFETY_THRESHOLD the patient may still move; they just should not load
+ * a painful joint.
+ *
+ * TODO: CONFIRM gentle threshold (>5) WITH DR. HARSHA
+ */
+const GENTLE_ONLY_THRESHOLD = 5;
+
+/** goalTags that mark an exercise as stretching / mobility / restorative. */
+const GENTLE_GOAL_TAGS = new Set([
+  'flexibility',
+  'mobility',
+  'recovery',
+  'stretch',
+  'stretching',
+  'yoga',
+  'warmup',
+  'cooldown',
+]);
+
+/**
+ * Is this safe to give someone in moderate pain?
+ *
+ * Warm-ups and cool-downs qualify by construction. Otherwise it must be tagged
+ * as gentle work AND be the easiest tier — a HARD "mobility" drill is still
+ * loading the joint.
+ */
+/** Exported for the classifier tests — pure, no I/O. */
+export function isGentleExercise(e: StartExerciseDTO): boolean {
+  if (e.isWarmup || e.isCooldown) return true;
+  const tagged = e.goalTag.some((t) => GENTLE_GOAL_TAGS.has(t.toLowerCase()));
+  return tagged && e.difficulty === 'EASY';
+}
+
 function isTerminal(state: SessionState): boolean {
   return TERMINAL_STATES.includes(state);
 }
@@ -88,6 +127,7 @@ export interface StartExerciseDTO {
   durationSeconds: number;
   difficulty: Difficulty;
   areaTag: string[];
+  goalTag: string[];
   isWarmup: boolean;
   isCooldown: boolean;
   sets?: number;
@@ -106,6 +146,11 @@ export interface StartedSession {
   groupAtTime?: string;
   levelAtTime?: number;
   safetyOverride: ISession['safetyOverride'];
+  /**
+   * True when pain was above GENTLE_ONLY_THRESHOLD and loaded exercises were
+   * withheld — the app tells the patient why their session is shorter.
+   */
+  gentleOnly: boolean;
   exercises: StartExerciseDTO[];
 }
 
@@ -172,6 +217,7 @@ async function buildStartExercises(content: ProgramDayContent): Promise<StartExe
         durationSeconds: v.durationSeconds,
         difficulty: v.difficulty,
         areaTag: v.areaTag,
+        goalTag: v.goalTag,
         isWarmup: v.isWarmup,
         isCooldown: v.isCooldown,
         sets: e.sets,
@@ -222,6 +268,26 @@ export async function startSession(
   if (!content) throw ApiError.notFound('Program day not found');
   if (content.isRestDay) throw ApiError.badRequest('This is a rest day — there is no workout to start');
 
+  // MODERATE PAIN (>5, below the hard block) → stretching/mobility only.
+  //
+  // Decided here, from the server's own view of the exercises, so the app
+  // cannot hand a patient loaded work by sending a different list.
+  const allExercises = await buildStartExercises(content);
+  const gentleOnly = maxScore > GENTLE_ONLY_THRESHOLD;
+  const exercises = gentleOnly ? allExercises.filter(isGentleExercise) : allExercises;
+
+  // A day with no gentle work is not safe to run at this pain level, and an
+  // empty session would strand the patient on a player with nothing in it.
+  if (gentleOnly && exercises.length === 0) {
+    return {
+      blocked: true,
+      maxScore,
+      message:
+        "Today's session is too demanding for the pain you've reported. Rest today, or book a consultation — we'll have gentler options for you soon.",
+      actions: ['REST_TODAY', 'BOOK_CONSULTATION'],
+    };
+  }
+
   // ONE PROGRAM DAY PER CALENDAR DAY.
   //
   // Enforced here rather than in the app so it cannot be tapped around. SHORT
@@ -247,6 +313,7 @@ export async function startSession(
     shortProgramTag: content.programType === 'SHORT' ? 'short_program' : undefined,
     state: 'WARMUP',
     currentExerciseIndex: 0,
+    gentleOnly,
     painCheckin: input.painCheckin,
     safetyOverride: didOverride
       ? { triggered: true, maxScore, overriddenAt: new Date() }
@@ -283,7 +350,8 @@ export async function startSession(
     groupAtTime: session.groupAtTime,
     levelAtTime: session.levelAtTime,
     safetyOverride: session.safetyOverride,
-    exercises: await buildStartExercises(content),
+    gentleOnly,
+    exercises,
   };
 }
 
@@ -297,6 +365,8 @@ export interface ActiveSessionResult {
     dayNumber?: number;
     programType?: ProgramType;
     currentExerciseIndex: number;
+    /** Session began in gentle mode — the app explains the shorter list. */
+    gentleOnly: boolean;
     painCheckin: { area: string; score: number }[];
     safetyOverride: ISession['safetyOverride'];
     startedAt?: Date;
@@ -314,7 +384,13 @@ export async function getActiveSession(userId: string): Promise<ActiveSessionRes
   let exercises: StartExerciseDTO[] = [];
   if (session.programDay) {
     const content = await getProgramDayContentById(session.programDay.toString());
-    if (content) exercises = await buildStartExercises(content);
+    if (content) {
+      exercises = await buildStartExercises(content);
+      // Honour the restriction the session was STARTED under. Rebuilding the
+      // full list here would give a patient in pain the loaded exercises the
+      // check-in deliberately withheld.
+      if (session.gentleOnly) exercises = exercises.filter(isGentleExercise);
+    }
   }
 
   return {
@@ -326,6 +402,7 @@ export async function getActiveSession(userId: string): Promise<ActiveSessionRes
       dayNumber: session.dayNumber,
       programType: session.programType,
       currentExerciseIndex: session.currentExerciseIndex,
+      gentleOnly: session.gentleOnly ?? false,
       painCheckin: session.painCheckin.map((p) => ({ area: p.area, score: p.score })),
       safetyOverride: session.safetyOverride,
       startedAt: session.startedAt,
@@ -430,6 +507,13 @@ export async function completeExercise(
   session.currentExerciseIndex = session.exercises.length;
   await session.save();
 
+  // Clinical roll-up. Deliberately non-fatal — see recordProgressDay.
+  try {
+    await recordProgressDay(session, exerciseId, input);
+  } catch (err) {
+    logger.error(`progressDay: failed to record for session ${session.id}`);
+  }
+
   return {
     sessionId: session.id,
     currentExerciseIndex: session.currentExerciseIndex,
@@ -444,6 +528,67 @@ export async function completeExercise(
     },
     alternative,
   };
+}
+
+/**
+ * Write one exercise's set-by-set work into the patient's ProgressDay.
+ *
+ * Upserted on (user, date, programDay) so restarting a session the same day
+ * appends to the same record instead of creating a second one that would
+ * double-count the day. Failure here must NOT fail the session: the exercise is
+ * already recorded on the Session, and losing a clinical roll-up is far less
+ * bad than telling a patient mid-workout that their set didn't save.
+ */
+async function recordProgressDay(
+  session: HydratedDocument<ISession>,
+  exerciseId: string,
+  input: CompleteExerciseInput
+): Promise<void> {
+  const repScheme = input.repScheme ?? DEFAULT_REP_SCHEME;
+  const restPreset = input.restPreset ?? DEFAULT_REST_SECONDS;
+
+  // Fall back to the scheme's own targets when a client sends no per-set detail.
+  const sets =
+    input.sets && input.sets.length > 0
+      ? input.sets
+      : REP_SCHEMES[repScheme].map((reps, i) => ({
+          setNumber: i + 1,
+          targetReps: reps,
+          completedReps: reps,
+          restSeconds: i < REP_SCHEMES[repScheme].length - 1 ? restPreset : 0,
+        }));
+
+  const date = clinicDateString(session.startedAt ?? session.createdAt);
+  const entry = {
+    exercise: new Types.ObjectId(exerciseId),
+    order: session.exercises.length,
+    repScheme,
+    restPreset,
+    sets,
+    easeScore: input.easeScore,
+    tooHard: input.tooHard,
+    tooEasy: input.tooEasy,
+  };
+
+  const doc =
+    (await ProgressDay.findOne({ user: session.user, date, programDay: session.programDay })) ??
+    new ProgressDay({
+      user: session.user,
+      program: session.program,
+      programDay: session.programDay,
+      session: session._id,
+      levelNumber: session.levelNumber,
+      dayNumber: session.dayNumber,
+      date,
+      exercises: [],
+    });
+
+  // Re-doing an exercise replaces its entry rather than appending a duplicate.
+  const existing = doc.exercises.findIndex((e) => e.exercise.toString() === exerciseId);
+  if (existing >= 0) doc.exercises[existing] = entry as never;
+  else doc.exercises.push(entry as never);
+
+  await doc.save(); // pre-save recomputes the totals
 }
 
 // ── Part 5.5 — complete the session (advances enrollment) ──────────────────────
@@ -637,6 +782,59 @@ export async function getHistory(
   }));
 
   return { data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) || 0 } };
+}
+
+// ── Records: progress days (set-by-set clinical record) ───────────────────────
+export interface ProgressDayCard {
+  date: string;
+  levelNumber?: number;
+  dayNumber?: number;
+  totalSets: number;
+  totalReps: number;
+  totalRestSeconds: number;
+  exercises: {
+    exerciseId: string;
+    title?: string;
+    repScheme: string;
+    restPreset: number;
+    sets: { setNumber: number; targetReps: number; completedReps: number; restSeconds?: number }[];
+    easeScore?: number;
+  }[];
+}
+
+/**
+ * The patient's set-by-set history, newest first. This is the view a clinician
+ * uses to decide progression — Session history answers "did they turn up",
+ * this answers "what did they actually lift".
+ */
+export async function getProgressDays(userId: string, limit = 30): Promise<ProgressDayCard[]> {
+  const docs = await ProgressDay.find({ user: userId }).sort({ date: -1 }).limit(limit);
+
+  const ids = [...new Set(docs.flatMap((d) => d.exercises.map((e) => e.exercise.toString())))];
+  const views = ids.length ? await getExercisesByIds(ids) : [];
+  const titleById = new Map(views.map((v) => [v.id, v.title]));
+
+  return docs.map((d) => ({
+    date: d.date,
+    levelNumber: d.levelNumber,
+    dayNumber: d.dayNumber,
+    totalSets: d.totalSets,
+    totalReps: d.totalReps,
+    totalRestSeconds: d.totalRestSeconds,
+    exercises: d.exercises.map((e) => ({
+      exerciseId: e.exercise.toString(),
+      title: titleById.get(e.exercise.toString()),
+      repScheme: e.repScheme,
+      restPreset: e.restPreset,
+      sets: e.sets.map((x) => ({
+        setNumber: x.setNumber,
+        targetReps: x.targetReps,
+        completedReps: x.completedReps,
+        restSeconds: x.restSeconds,
+      })),
+      easeScore: e.easeScore,
+    })),
+  }));
 }
 
 // ── Records: calendar ────────────────────────────────────────────────────────────

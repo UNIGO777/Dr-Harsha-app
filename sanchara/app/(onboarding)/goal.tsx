@@ -1,7 +1,7 @@
 // Onboarding step 9 — main fitness goal, then the SINGLE backend submit of the
 // whole profile. Backend returns `completed` (tokens -> sign in) or `waitlisted`.
 import { useRouter } from 'expo-router';
-import { Activity, Dumbbell, Flame, HeartPulse, Pencil } from 'lucide-react-native';
+import { Activity, Baby, Dumbbell, Flame, HeartPulse, Pencil } from 'lucide-react-native';
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 
@@ -17,9 +17,10 @@ const OTHER = '__other__';
 
 const GOALS = [
   { value: 'Pain relief', description: 'Ease discomfort and recover', icon: HeartPulse },
-  { value: 'Improve overall fitness', description: 'Build all-round health', icon: Activity },
+  { value: 'Improve overall health', description: 'Build all-round fitness', icon: Activity },
   { value: 'Fat loss', description: 'Active weight management', icon: Flame },
   { value: 'Muscle gain', description: 'Build strength and mass', icon: Dumbbell },
+  { value: 'Pre-pregnancy fitness', description: 'Prepare your body to conceive', icon: Baby },
 ] as const;
 
 const FIXED = GOALS.map((g) => g.value) as string[];

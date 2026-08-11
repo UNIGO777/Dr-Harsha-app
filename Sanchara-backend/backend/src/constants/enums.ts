@@ -16,6 +16,8 @@ export type Gender = (typeof GENDERS)[number];
 export const EXERCISE_HISTORY_LEVELS = [
   'none',
   'beginner',
+  /** Plays sport but does no structured training — active, but untrained. */
+  'sports_only',
   'intermediate',
   'advanced',
 ] as const;
@@ -137,3 +139,28 @@ export const AUDIT_ACTIONS_REQUIRING_REASON = [
   // Blocking cuts a patient off from prescribed exercise — always justify it.
   'ACCOUNT_STATUS_CHANGED',
 ] as const;
+
+// ── Sets, reps and rest (session engine) ──────────────────────────────────────
+
+/**
+ * Rep schemes the patient can pick from. Each entry is the reps for set 1, 2
+ * and 3 in order — so the LENGTH of the array is the number of sets, and a
+ * descending scheme like 15-12-10 is a pyramid, not a mistake.
+ *
+ * TODO: CONFIRM the three schemes + defaults WITH DR. HARSHA
+ */
+export const REP_SCHEMES = {
+  '10-10-10': [10, 10, 10],
+  '15-12-10': [15, 12, 10],
+  '5-5-5': [5, 5, 5],
+} as const;
+
+export const REP_SCHEME_IDS = Object.keys(REP_SCHEMES) as (keyof typeof REP_SCHEMES)[];
+export type RepSchemeId = keyof typeof REP_SCHEMES;
+
+/** Rest between sets, in seconds. 60 is the standard starting point. */
+export const REST_PRESETS = [60, 120, 180] as const;
+export type RestPreset = (typeof REST_PRESETS)[number];
+
+export const DEFAULT_REP_SCHEME: RepSchemeId = '10-10-10';
+export const DEFAULT_REST_SECONDS: RestPreset = 60;

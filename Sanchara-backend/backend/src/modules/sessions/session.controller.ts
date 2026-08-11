@@ -130,3 +130,13 @@ export async function getById(req: Request, res: Response, next: NextFunction): 
     next(err);
   }
 }
+
+/** GET /sessions/progress-days — set-by-set record, newest first. */
+export async function progressDays(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const days = await sessionService.getProgressDays(userId(req));
+    res.json({ success: true, days });
+  } catch (err) {
+    next(err);
+  }
+}

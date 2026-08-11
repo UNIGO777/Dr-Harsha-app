@@ -122,6 +122,8 @@ export interface ExerciseSessionView {
   durationSeconds: number;
   difficulty: Difficulty;
   areaTag: string[];
+  /** Needed by the session engine to tell gentle work from loaded work. */
+  goalTag: string[];
   isWarmup: boolean;
   isCooldown: boolean;
   storageKey: string;
@@ -142,6 +144,7 @@ export async function getExercisesByIds(ids: string[]): Promise<ExerciseSessionV
     durationSeconds: d.durationSeconds,
     difficulty: d.difficulty,
     areaTag: d.areaTag,
+    goalTag: d.goalTag ?? [],
     isWarmup: d.isWarmup,
     isCooldown: d.isCooldown,
     storageKey: d.videoUrl,

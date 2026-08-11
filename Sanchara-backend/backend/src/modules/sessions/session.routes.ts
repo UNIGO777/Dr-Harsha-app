@@ -36,6 +36,7 @@ router.get('/active', ctrl.active);
 router.get('/history', validate({ query: historyQuerySchema }), ctrl.history);
 router.get('/calendar', validate({ query: calendarQuerySchema }), ctrl.calendar);
 router.get('/trends', ctrl.trends);
+router.get('/progress-days', ctrl.progressDays);
 
 // ── Per-session lifecycle actions ─────────────────────────────────────────────
 router.patch(

@@ -36,6 +36,11 @@ export function assignLevel(history: ExerciseHistoryLevel): number {
     case 'none':
     case 'beginner':
       return 1;
+    // Sport builds real capacity, but without structured training the movement
+    // patterns we prescribe are still new — so it sits with intermediate, not
+    // advanced.
+    // TODO: CONFIRM 'sports_only' -> level 2 WITH DR. HARSHA
+    case 'sports_only':
     case 'intermediate':
       return 2;
     case 'advanced':

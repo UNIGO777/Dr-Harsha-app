@@ -35,6 +35,7 @@ const COMMON_CONDITIONS = [
 const ACTIVITY_LABEL: Record<ExerciseHistoryLevel, string> = {
   none: 'Not active',
   beginner: 'Beginner',
+  sports_only: 'I play sports',
   intermediate: 'Intermediate',
   advanced: 'Advanced',
 };

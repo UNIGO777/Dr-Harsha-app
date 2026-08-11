@@ -76,10 +76,22 @@ Fingerprint of the current key (`SHA-256`), for Play Console / API allow-lists:
 ## Verify before sending
 
 ```sh
-# 1. Signed with the release key (not the debug one)?
-keytool -printcert -jarfile android/app/build/outputs/apk/release/app-release.apk
-
-# 2. Correct API URL actually baked in?
-unzip -p android/app/build/outputs/apk/release/app-release.apk assets/index.android.bundle \
-  | strings | grep -o 'https://[a-z.]*nxtgendigitals[^"]*'
+./scripts/verify-apk.sh "any string from a screen you changed"
 ```
+
+Checks the signature, the baked-in API URL, that no dev-machine address leaked
+in, and any strings you name.
+
+### Do not hand-roll these checks
+
+Both obvious approaches give a FALSE FAILURE, and each cost real time here:
+
+- **`keytool -printcert -jarfile`** reads only v1 JAR signatures. Release APKs
+  are v2/v3-signed with no `META-INF/*.RSA`, so keytool prints nothing and the
+  APK looks unsigned. Use `apksigner verify`.
+
+- **`strings | grep` for UI copy.** Hermes stores a string as UTF-16 if it
+  contains *any* non-ASCII character — an em dash, a curly quote, `₹`. A plain
+  ASCII grep then finds nothing and the string looks absent from the bundle.
+  This one triggered a wasted 30-minute full rebuild chasing a non-existent
+  stale-cache bug. The script searches both encodings.

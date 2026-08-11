@@ -13,6 +13,11 @@ const OPTIONS: { value: ExerciseHistoryLevel; title: string; description: string
   { value: 'none', title: 'None', description: 'I do not exercise regularly' },
   { value: 'beginner', title: 'Beginner', description: 'Walking, yoga, or light exercise' },
   {
+    value: 'sports_only',
+    title: 'I play sports',
+    description: 'Active through sport, but no structured exercise or training',
+  },
+  {
     value: 'intermediate',
     title: 'Intermediate',
     description: 'Gym, sports, or structured exercise 2–4 times per week',

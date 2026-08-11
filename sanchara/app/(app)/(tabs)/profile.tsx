@@ -32,6 +32,7 @@ const GENDER_LABEL: Record<string, string> = {
 const ACTIVITY_LABEL: Record<string, string> = {
   none: 'Not active yet',
   beginner: 'Beginner',
+  sports_only: 'Plays sports',
   intermediate: 'Intermediate',
   advanced: 'Advanced',
 };
