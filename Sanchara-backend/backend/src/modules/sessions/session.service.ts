@@ -12,7 +12,7 @@ import { getProgramDayContentById, type ProgramDayContent } from '../programs/pr
 import { clinicDateString } from '../../utils/clinicDate';
 import { logger } from '../../utils/logger';
 import { ProgressDay } from '../../models/progressDay.model';
-import { DEFAULT_REP_SCHEME, DEFAULT_REST_SECONDS, REP_SCHEMES } from '../../constants/enums';
+import { DEFAULT_REPS, REST_SECONDS } from '../../constants/enums';
 import {
   advanceForCompletedDay,
   getDailyLock,
@@ -544,27 +544,20 @@ async function recordProgressDay(
   exerciseId: string,
   input: CompleteExerciseInput
 ): Promise<void> {
-  const repScheme = input.repScheme ?? DEFAULT_REP_SCHEME;
-  const restPreset = input.restPreset ?? DEFAULT_REST_SECONDS;
-
-  // Fall back to the scheme's own targets when a client sends no per-set detail.
-  const sets =
-    input.sets && input.sets.length > 0
-      ? input.sets
-      : REP_SCHEMES[repScheme].map((reps, i) => ({
-          setNumber: i + 1,
-          targetReps: reps,
-          completedReps: reps,
-          restSeconds: i < REP_SCHEMES[repScheme].length - 1 ? restPreset : 0,
-        }));
+  const targetReps = input.targetReps ?? DEFAULT_REPS;
+  // A patient who finishes early records FEWER than the target. Defaulting to
+  // the target would quietly turn every record into "did exactly as told",
+  // which is the one thing a clinician cannot afford to be lied to about.
+  const completedReps = input.completedReps ?? targetReps;
 
   const date = clinicDateString(session.startedAt ?? session.createdAt);
   const entry = {
     exercise: new Types.ObjectId(exerciseId),
     order: session.exercises.length,
-    repScheme,
-    restPreset,
-    sets,
+    targetReps,
+    completedReps,
+    restSeconds: input.restSeconds ?? REST_SECONDS,
+    sets: [],
     easeScore: input.easeScore,
     tooHard: input.tooHard,
     tooEasy: input.tooEasy,
@@ -795,10 +788,14 @@ export interface ProgressDayCard {
   exercises: {
     exerciseId: string;
     title?: string;
-    repScheme: string;
-    restPreset: number;
-    sets: { setNumber: number; targetReps: number; completedReps: number; restSeconds?: number }[];
+    /** Reps chosen, and how many were actually done. */
+    targetReps: number;
+    completedReps: number;
+    restSeconds: number;
     easeScore?: number;
+    /** Set only on records written before the single-round redesign. */
+    legacyScheme?: string;
+    legacySets?: { setNumber: number; targetReps: number; completedReps: number }[];
   }[];
 }
 
@@ -821,19 +818,31 @@ export async function getProgressDays(userId: string, limit = 30): Promise<Progr
     totalSets: d.totalSets,
     totalReps: d.totalReps,
     totalRestSeconds: d.totalRestSeconds,
-    exercises: d.exercises.map((e) => ({
-      exerciseId: e.exercise.toString(),
-      title: titleById.get(e.exercise.toString()),
-      repScheme: e.repScheme,
-      restPreset: e.restPreset,
-      sets: e.sets.map((x) => ({
-        setNumber: x.setNumber,
-        targetReps: x.targetReps,
-        completedReps: x.completedReps,
-        restSeconds: x.restSeconds,
-      })),
-      easeScore: e.easeScore,
-    })),
+    exercises: d.exercises.map((e) => {
+      // Legacy documents carry their numbers in `sets`; roll them up so a
+      // clinician reading history sees one consistent shape.
+      const legacy = e.sets.length > 0;
+      return {
+        exerciseId: e.exercise.toString(),
+        title: titleById.get(e.exercise.toString()),
+        targetReps: legacy ? e.sets.reduce((a, x) => a + x.targetReps, 0) : e.targetReps,
+        completedReps: legacy ? e.sets.reduce((a, x) => a + x.completedReps, 0) : e.completedReps,
+        restSeconds: legacy
+          ? e.sets.reduce((a, x) => a + (x.restSeconds ?? 0), 0)
+          : (e.restSeconds ?? 0),
+        easeScore: e.easeScore,
+        ...(legacy
+          ? {
+              legacyScheme: e.repScheme,
+              legacySets: e.sets.map((x) => ({
+                setNumber: x.setNumber,
+                targetReps: x.targetReps,
+                completedReps: x.completedReps,
+              })),
+            }
+          : {}),
+      };
+    }),
   }));
 }
 

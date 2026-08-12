@@ -1,5 +1,5 @@
 import { Schema, model, type Types } from 'mongoose';
-import { REP_SCHEME_IDS, type RepSchemeId } from '../constants/enums';
+import { LEGACY_REP_SCHEME_IDS, type LegacyRepSchemeId } from '../constants/enums';
 
 /**
  * ProgressDay — what the patient ACTUALLY did on a given day, set by set.
@@ -29,10 +29,18 @@ export interface IProgressSet {
 export interface IProgressExercise {
   exercise: Types.ObjectId;
   order: number;
-  /** Which scheme the patient chose, e.g. '15-12-10'. */
-  repScheme: RepSchemeId;
-  /** Rest preset chosen for this exercise, in seconds. */
-  restPreset: number;
+  /** Reps the patient chose for this exercise (5 / 10 / 20). */
+  targetReps: number;
+  /** Reps they actually completed — lower when they finished early. */
+  completedReps: number;
+  /** Rest taken after this exercise, in seconds. */
+  restSeconds: number;
+  /**
+   * LEGACY. Documents written before the single-round redesign carry a
+   * multi-set scheme here. Kept so that history still reads; never written now.
+   */
+  repScheme?: LegacyRepSchemeId;
+  /** LEGACY per-set breakdown, for those same older documents. */
   sets: IProgressSet[];
   easeScore?: number;
   tooHard: boolean;
@@ -73,8 +81,10 @@ const progressExerciseSchema = new Schema<IProgressExercise>(
   {
     exercise: { type: Schema.Types.ObjectId, ref: 'Exercise', required: true },
     order: { type: Number, required: true, min: 0 },
-    repScheme: { type: String, enum: REP_SCHEME_IDS, required: true },
-    restPreset: { type: Number, required: true, min: 0 },
+    targetReps: { type: Number, required: true, min: 0 },
+    completedReps: { type: Number, required: true, min: 0 },
+    restSeconds: { type: Number, default: 0, min: 0 },
+    repScheme: { type: String, enum: LEGACY_REP_SCHEME_IDS },
     sets: { type: [progressSetSchema], default: [] },
     easeScore: { type: Number, min: 1, max: 10 },
     tooHard: { type: Boolean, default: false },
@@ -115,10 +125,18 @@ progressDaySchema.pre('save', function recalcTotals() {
   let reps = 0;
   let rest = 0;
   for (const ex of this.exercises) {
-    sets += ex.sets.length;
-    for (const s of ex.sets) {
-      reps += s.completedReps;
-      rest += s.restSeconds ?? 0;
+    if (ex.sets.length > 0) {
+      // Legacy multi-set document.
+      sets += ex.sets.length;
+      for (const s of ex.sets) {
+        reps += s.completedReps;
+        rest += s.restSeconds ?? 0;
+      }
+    } else {
+      // Current shape: one round per exercise.
+      sets += 1;
+      reps += ex.completedReps;
+      rest += ex.restSeconds ?? 0;
     }
   }
   this.totalSets = sets;

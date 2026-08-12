@@ -230,15 +230,10 @@ export function useCompleteExercise() {
       restTimerSeconds?: number;
       tooHard?: boolean;
       tooEasy?: boolean;
-      /** Set-by-set detail — backs the clinician's ProgressDay record. */
-      repScheme?: string;
-      restPreset?: number;
-      sets?: {
-        setNumber: number;
-        targetReps: number;
-        completedReps: number;
-        restSeconds?: number;
-      }[];
+      /** The clinical record: reps asked for, reps actually done, recovery taken. */
+      targetReps?: number;
+      completedReps?: number;
+      restSeconds?: number;
     }) => {
       const { data } = await api.post<CompleteExerciseResult>(
         endpoints.sessions.exerciseComplete(sessionId, exerciseId),

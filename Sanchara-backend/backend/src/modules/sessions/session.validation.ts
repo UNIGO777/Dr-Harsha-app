@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { SESSION_STATES, REP_SCHEME_IDS } from '../../constants/enums';
+import { SESSION_STATES } from '../../constants/enums';
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid id');
 
@@ -26,22 +26,14 @@ export const advanceStateSchema = z.object({
 });
 
 // ── Exercise completion ───────────────────────────────────────────────────────
-/** One set as the patient actually performed it. */
-const performedSet = z.object({
-  setNumber: z.number().int().min(1),
-  targetReps: z.number().int().min(0).max(200),
-  completedReps: z.number().int().min(0).max(200),
-  restSeconds: z.number().int().min(0).max(600).optional(),
-});
-
 export const completeExerciseSchema = z
   .object({
     setsCompleted: z.number().int().min(0).default(0),
-    /** Which scheme the patient chose, and the rest they picked. */
-    repScheme: z.enum(REP_SCHEME_IDS).optional(),
-    restPreset: z.number().int().min(0).max(600).optional(),
-    /** Per-set detail. Absent for older clients, which still record sets only. */
-    sets: z.array(performedSet).max(10).optional(),
+    /** Reps the patient chose, and how many they actually managed. */
+    targetReps: z.number().int().min(0).max(200).optional(),
+    completedReps: z.number().int().min(0).max(200).optional(),
+    /** Recovery taken after this exercise. */
+    restSeconds: z.number().int().min(0).max(600).optional(),
     easeScore: z.number().int().min(1).max(10), // MANDATORY — no default, must be present
     restTimerSeconds: z.number().int().min(0).default(0),
     tooHard: z.boolean().default(false),

@@ -5,26 +5,28 @@
  * same code path as starting fresh — the server's `currentExerciseIndex` is the
  * single source of truth for "where am I", never local state.
  *
- * Per exercise: watch → rate → record. The rating is not optional decoration;
- * `easeScore` is required by POST /exercise/:id/complete because it feeds the
- * progression engine, so the UI collects it before advancing the pointer.
+ * Five screens, one loop per movement:
  *
- * State machine: the session sits in EXERCISE_ACTIVE for the whole workout and
- * moves to SESSION_SUMMARY once the last exercise is recorded. Both are legal
- * transitions; the finer-grained NEXT_EXERCISE hop is skipped deliberately, as
- * it would add two round-trips per exercise without changing what the patient
- * sees or what the records contain.
+ *   READY      pick reps (5 / 10 / 20) → Start
+ *   ACTIVE     video + tap-to-count → Done
+ *   COMPLETE   the honest number, ease rating on the first movement only
+ *   RECOVERY   30s, then the next movement
+ *   FINISHED   duration → back to My Day
+ *
+ * The write to the server happens once per movement, on Continue from COMPLETE.
+ * Everything before that is local, so a mis-tap is recoverable ("Keep going")
+ * without having to un-write a clinical record.
  */
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Check, ChevronLeft, Leaf, Sliders, VideoOff } from 'lucide-react-native';
+import { Check, Leaf } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, BackHandler, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, BackHandler, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { RatingScale } from '@/components/session/RatingScale';
-import { RestTimer } from '@/components/session/RestTimer';
-import { SetPlanSheet } from '@/components/session/SetPlanSheet';
-import { VideoStage } from '@/components/session/VideoStage';
+import { ExerciseStage } from '@/components/session/ExerciseStage';
+import { MovementComplete } from '@/components/session/MovementComplete';
+import { RecoveryTimer } from '@/components/session/RecoveryTimer';
+import { RepChooser } from '@/components/session/RepChooser';
 import { Button, ErrorState } from '@/components/ui';
 import {
   useAbandonSession,
@@ -33,26 +35,12 @@ import {
   useCompleteExercise,
   useCompleteSession,
 } from '@/features/sessions/api';
-import {
-  DEFAULT_REP_SCHEME,
-  DEFAULT_REST_SECONDS,
-  REP_SCHEMES,
-  type RepSchemeId,
-  type RestPreset,
-} from '@/lib/enums';
-import { resolveMediaUrl } from '@/lib/media';
+import { DEFAULT_REPS, REST_SECONDS, type RepOption } from '@/lib/enums';
+import { resolveMediaUrl, resolveThumbnail } from '@/lib/media';
 import { withAlpha } from '@/theme/tokens';
 import { useThemeColors } from '@/theme/useTheme';
 
-type Phase = 'watch' | 'rest' | 'rate' | 'summary';
-
-/** One set as performed, in the shape the API records. */
-interface PerformedSet {
-  setNumber: number;
-  targetReps: number;
-  completedReps: number;
-  restSeconds?: number;
-}
+type Phase = 'ready' | 'active' | 'complete' | 'recovery' | 'finished';
 
 export default function SessionPlayerScreen() {
   const colors = useThemeColors();
@@ -64,22 +52,6 @@ export default function SessionPlayerScreen() {
   const completeSession = useCompleteSession();
   const abandon = useAbandonSession();
 
-  const [phase, setPhase] = useState<Phase>('watch');
-  const [ease, setEase] = useState<number | null>(null);
-  const [effort, setEffort] = useState<'tooHard' | 'tooEasy' | null>(null);
-  /**
-   * The rating is asked ONCE per session, after the first exercise, and reused
-   * for the rest — being stopped after every single exercise made a short
-   * workout feel like a questionnaire.
-   *
-   * `easeScore` is required per exercise by the API (it feeds the progression
-   * engine), so the first answer is carried forward. The session average is
-   * therefore identical to the single reading given.
-   */
-  const sessionEase = useRef<number | null>(null);
-  const sessionEffort = useRef<'tooHard' | 'tooEasy' | null>(null);
-
-
   const session = active?.session;
   const exercises = active?.exercises ?? [];
   const index = session?.currentExerciseIndex ?? 0;
@@ -87,25 +59,45 @@ export default function SessionPlayerScreen() {
   const exercise = exercises[index];
   const done = total > 0 && index >= total;
 
-  // ── Sets, reps and rest ────────────────────────────────────────────────────
-  // The plan is per EXERCISE but carried across them, so a patient who picks
-  // 5-5-5 on the first movement is not asked again on every one after it.
-  const [scheme, setScheme] = useState<RepSchemeId>(DEFAULT_REP_SCHEME);
-  const [rest, setRest] = useState<RestPreset>(DEFAULT_REST_SECONDS);
-  const [planOpen, setPlanOpen] = useState(false);
-  const [setIndex, setSetIndex] = useState(0);
-  const performed = useRef<PerformedSet[]>([]);
+  const [phase, setPhase] = useState<Phase>('ready');
+  const [paused, setPaused] = useState(false);
 
-  const repPlan = REP_SCHEMES[scheme];
-  const totalSets = repPlan.length;
-  const currentReps = repPlan[setIndex] ?? repPlan[repPlan.length - 1] ?? 0;
-  const isLastSet = setIndex >= totalSets - 1;
+  /**
+   * The rep choice CARRIES across the session — someone who picks 5 on the first
+   * movement should not be asked to re-pick on every one after it — but READY
+   * still shows it, so dropping from 10 to 5 on the movement that hurts is one
+   * tap rather than a settings trip.
+   */
+  const [reps, setReps] = useState<RepOption>(DEFAULT_REPS);
+  const [count, setCount] = useState(0);
 
-  // A new exercise starts its sets from scratch.
+  /**
+   * Ease is asked ONCE per session and reused. `easeScore` is mandatory per
+   * exercise server-side (it feeds the progression engine), so the first answer
+   * is carried forward rather than the patient being stopped after every
+   * movement — which turned a ten-minute workout into a questionnaire.
+   */
+  const sessionEase = useRef<number | null>(null);
+  const sessionEffort = useRef<'tooHard' | 'tooEasy' | null>(null);
+  const [ease, setEase] = useState<number | null>(null);
+  const [effort, setEffort] = useState<'tooHard' | 'tooEasy' | null>(null);
+
+  const startedAt = useRef(Date.now());
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  /**
+   * Recording a movement advances `currentExerciseIndex` through the query
+   * cache, which re-renders this screen. The phase transition therefore has to
+   * live HERE rather than after the `await` in `recordAndAdvance` — the two
+   * would otherwise race, and whichever lost would strand the patient on the
+   * wrong screen (usually skipping recovery entirely).
+   */
+  const goToRecovery = useRef(false);
   useEffect(() => {
-    setSetIndex(0);
-    performed.current = [];
-    setPhase('watch');
+    setCount(0);
+    setPaused(false);
+    setPhase(goToRecovery.current ? 'recovery' : 'ready');
+    goToRecovery.current = false;
   }, [index]);
 
   // Leave WARMUP once the player is up. Fire-and-forget: a failed transition
@@ -119,66 +111,46 @@ export default function SessionPlayerScreen() {
     advanceState.mutate({ sessionId: session.sessionId, nextState: 'EXERCISE_ACTIVE' });
   }, [session, advanceState]);
 
-  // All exercises recorded → summary.
   useEffect(() => {
-    if (done) setPhase('summary');
+    if (session?.startedAt) startedAt.current = new Date(session.startedAt).getTime();
+  }, [session?.startedAt]);
+
+  // All movements recorded → the closing screen.
+  useEffect(() => {
+    if (!done) return;
+    setElapsedSeconds(Math.max(0, Math.round((Date.now() - startedAt.current) / 1000)));
+    setPhase('finished');
   }, [done]);
 
-  /** Records the current exercise. `score` is the rating to attribute to it. */
-  async function recordExercise(score: number, flag: 'tooHard' | 'tooEasy' | null) {
+  /** Write the movement just finished, then move the pointer on. */
+  async function recordAndAdvance() {
     if (!session || !exercise) return;
+
+    const score = sessionEase.current ?? ease;
+    if (score === null) return; // COMPLETE keeps Continue disabled until answered
+    sessionEase.current = score;
+    if (sessionEffort.current === null) sessionEffort.current = effort;
+
+    const isLast = index + 1 >= total;
+    goToRecovery.current = !isLast;
+
     try {
       await completeExercise.mutateAsync({
         sessionId: session.sessionId,
         exerciseId: exercise.exerciseId,
-        setsCompleted: performed.current.length || 1,
+        setsCompleted: count > 0 ? 1 : 0,
         easeScore: score,
-        tooHard: flag === 'tooHard',
-        tooEasy: flag === 'tooEasy',
-        // Set-by-set detail — this is what the clinician's ProgressDay reads.
-        repScheme: scheme,
-        restPreset: rest,
-        sets: performed.current,
+        tooHard: sessionEffort.current === 'tooHard',
+        tooEasy: sessionEffort.current === 'tooEasy',
+        // The clinical record: what was asked for, and what was actually done.
+        targetReps: reps,
+        completedReps: count,
+        restSeconds: isLast ? 0 : REST_SECONDS,
       });
-      setPhase('watch');
     } catch {
-      Alert.alert('Could not save', 'That exercise was not recorded. Please try again.');
+      goToRecovery.current = false; // the pointer never moved — stay put
+      Alert.alert('Could not save', 'That movement was not recorded. Please try again.');
     }
-  }
-
-  /** From the rating screen: remember the answer, then record. */
-  async function submitRating() {
-    if (ease === null) return;
-    sessionEase.current = ease;
-    sessionEffort.current = effort;
-    await recordExercise(ease, effort);
-  }
-
-  /**
-   * Finish the CURRENT SET. Mid-exercise this leads to rest; on the last set it
-   * finishes the exercise (asking for a rating the first time only).
-   */
-  async function finishSet() {
-    performed.current = [
-      ...performed.current,
-      {
-        setNumber: setIndex + 1,
-        targetReps: currentReps,
-        completedReps: currentReps,
-        restSeconds: isLastSet ? 0 : rest,
-      },
-    ];
-
-    if (!isLastSet) {
-      setPhase('rest');
-      return;
-    }
-
-    if (sessionEase.current === null) {
-      setPhase('rate');
-      return;
-    }
-    await recordExercise(sessionEase.current, sessionEffort.current);
   }
 
   async function finishSession() {
@@ -249,11 +221,7 @@ export default function SessionPlayerScreen() {
   if (isError) {
     return (
       <SafeAreaView className="flex-1 bg-base">
-        <ErrorState
-          error={error}
-          onRetry={() => void refetch()}
-          title="We couldn't load your session"
-        />
+        <ErrorState error={error} onRetry={() => void refetch()} title="We couldn't load your session" />
       </SafeAreaView>
     );
   }
@@ -274,8 +242,9 @@ export default function SessionPlayerScreen() {
     );
   }
 
-  // ── Summary ────────────────────────────────────────────────────────────────
-  if (phase === 'summary' || done) {
+  // ── SESSION COMPLETE ───────────────────────────────────────────────────────
+  if (phase === 'finished' || done) {
+    const minutes = Math.max(1, Math.round(elapsedSeconds / 60));
     return (
       <SafeAreaView className="flex-1 bg-base px-6">
         <View className="flex-1 justify-center">
@@ -289,19 +258,15 @@ export default function SessionPlayerScreen() {
             Session complete
           </Text>
           <Text className="mt-3 font-sans text-base leading-7 text-secondary">
-            You finished {total} exercise{total === 1 ? '' : 's'}
-            {session.levelNumber ? ` on level ${session.levelNumber}` : ''}
-            {session.dayNumber ? `, day ${session.dayNumber}` : ''}. That&apos;s another day of
+            {total} movement{total === 1 ? '' : 's'} in {minutes} minute{minutes === 1 ? '' : 's'}
+            {session.levelNumber ? `, level ${session.levelNumber}` : ''}
+            {session.dayNumber ? ` day ${session.dayNumber}` : ''}. That&apos;s another day of
             progress banked.
           </Text>
         </View>
 
         <View className="pb-4">
-          <Button
-            label="Finish"
-            loading={completeSession.isPending}
-            onPress={finishSession}
-          />
+          <Button label="Back to My Day" loading={completeSession.isPending} onPress={finishSession} />
         </View>
       </SafeAreaView>
     );
@@ -323,28 +288,47 @@ export default function SessionPlayerScreen() {
   const videoUri = resolveMediaUrl(exercise.videoUrl);
 
   return (
-    <SafeAreaView className="flex-1 bg-base">
-      {/* Header — position in the workout */}
-      <View className="flex-row items-center px-5 py-2">
-        <Pressable onPress={confirmQuit} hitSlop={12} className="w-10" accessibilityLabel="End session">
-          <ChevronLeft color={colors.accent} size={26} />
-        </Pressable>
-        <View className="flex-1 items-center">
-          <Text
-            className="font-sans-semibold text-[11px]"
-            style={{ color: colors.microLabel, letterSpacing: 1.6 }}
-          >
-            EXERCISE {index + 1} OF {total}
+    <SafeAreaView className="flex-1 bg-base" edges={['top', 'bottom']}>
+      {/* Header. "Finish early" rather than a back chevron: leaving is a
+          legitimate choice, not an escape, and naming it plainly beats an
+          ambiguous arrow that patients read as "undo". */}
+      <View className="flex-row items-center justify-between px-5 py-2">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Finish this session early"
+          onPress={confirmQuit}
+          hitSlop={12}
+          className="active:opacity-70"
+        >
+          <Text className="font-sans-semibold text-[14px]" style={{ color: colors.accent }}>
+            Finish early
           </Text>
-        </View>
-        <View className="w-10" />
+        </Pressable>
+
+        <Text
+          className="font-sans-semibold text-[11px]"
+          style={{ color: colors.microLabel, letterSpacing: 1.4 }}
+        >
+          {index + 1} OF {total}
+        </Text>
       </View>
 
-      {/* Moderate pain at check-in → loaded work was withheld. Say so, or the
-          shorter session reads as a bug. */}
-      {session.gentleOnly ? (
+      {/* Progress across the whole workout */}
+      <View className="mb-2 flex-row gap-1 px-5">
+        {exercises.map((e, i) => (
+          <View
+            key={`${e.exerciseId}-${i}`}
+            className="h-[3px] flex-1 rounded-pill"
+            style={{ backgroundColor: i <= index ? colors.accent : colors.border }}
+          />
+        ))}
+      </View>
+
+      {/* Moderate pain at check-in → loaded work was withheld. Say so on READY,
+          or the shorter session reads as a bug. ACTIVE stays quiet. */}
+      {session.gentleOnly && phase === 'ready' ? (
         <View
-          className="mx-5 mb-3 flex-row items-start rounded-input p-3"
+          className="mx-5 mb-1 mt-2 flex-row items-start rounded-input p-3"
           style={{ backgroundColor: withAlpha(colors.amber, 0.12) }}
         >
           <Leaf color={colors.amber} size={15} />
@@ -358,233 +342,66 @@ export default function SessionPlayerScreen() {
         </View>
       ) : null}
 
-      {/* Progress bar across the whole workout */}
-      <View className="mb-3 flex-row gap-1 px-5">
-        {exercises.map((e, i) => (
-          <View
-            key={`${e.exerciseId}-${i}`}
-            className="h-[3px] flex-1 rounded-pill"
-            style={{ backgroundColor: i <= index ? colors.accent : colors.border }}
-          />
-        ))}
-      </View>
-
-      {phase === 'rest' ? (
-        <RestTimer
-          seconds={rest}
-          nextSetNumber={setIndex + 2}
-          nextSetReps={repPlan[setIndex + 1] ?? currentReps}
-          onDone={() => {
-            setSetIndex((i) => i + 1);
-            setPhase('watch');
+      {phase === 'ready' ? (
+        <RepChooser
+          title={exercise.title}
+          notes={exercise.notes}
+          // Must go through resolveThumbnail: the server hands back a
+          // SERVER-RELATIVE path, which expo-image renders as nothing at all.
+          thumbnail={resolveThumbnail(exercise)}
+          position={index + 1}
+          total={total}
+          reps={reps}
+          onChangeReps={setReps}
+          onStart={() => {
+            setCount(0);
+            setPaused(false);
+            setPhase('active');
           }}
         />
-      ) : phase === 'watch' ? (
-        <View className="flex-1 px-5 pb-4">
-          {/* Video takes the TOP HALF; the set tracker below it is what the
-              patient works from once they know the movement. */}
-          <View style={{ height: '46%' }}>
-            {videoUri ? (
-              <VideoStage
-                key={`${exercise.exerciseId}-${index}`}
-                uri={videoUri}
-                onPlayToEnd={() => {
-                  /* looping clip - the patient decides when they're done */
-                }}
-              />
-            ) : (
-              <View
-                className="h-full w-full items-center justify-center rounded-card border border-border"
-                style={{ backgroundColor: colors.surface }}
-              >
-                <VideoOff color={colors.microLabel} size={30} />
-                <Text className="mt-2 font-sans text-[13px] text-secondary">
-                  No video for this exercise yet
-                </Text>
-              </View>
-            )}
-          </View>
-
-          <ScrollView className="mt-4 flex-1" showsVerticalScrollIndicator={false}>
-            <Text className="font-display-bold text-2xl text-primary">{exercise.title}</Text>
-            <Text className="mt-1 font-sans text-[13px]" style={{ color: colors.microLabel }}>
-              {Math.max(1, Math.round(exercise.durationSeconds / 60))} min
-              {exercise.isWarmup ? ' \u00b7 Warm-up' : exercise.isCooldown ? ' \u00b7 Cool-down' : ''}
-            </Text>
-
-            {/* THE SET TRACKER */}
-            <View
-              className="mt-4 rounded-card p-4"
-              style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
-            >
-              <View className="flex-row items-center justify-between">
-                <Text
-                  className="font-sans-semibold text-[11px]"
-                  style={{ color: colors.microLabel, letterSpacing: 1.6 }}
-                >
-                  SET {setIndex + 1} OF {totalSets}
-                </Text>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Change reps and rest"
-                  onPress={() => setPlanOpen(true)}
-                  hitSlop={8}
-                  className="flex-row items-center active:opacity-70"
-                >
-                  <Sliders color={colors.accent} size={13} />
-                  <Text
-                    className="ml-1.5 font-sans-semibold text-[12px]"
-                    style={{ color: colors.accent }}
-                  >
-                    {scheme} \u00b7 {rest}s
-                  </Text>
-                </Pressable>
-              </View>
-
-              <Text className="mt-2 font-display-bold text-4xl text-primary">
-                {currentReps} <Text className="font-sans text-lg text-secondary">reps</Text>
-              </Text>
-
-              {/* One pill per set - done, current, still to come. */}
-              <View className="mt-4 flex-row gap-2">
-                {repPlan.map((reps, i) => {
-                  const doneSet = i < setIndex;
-                  const current = i === setIndex;
-                  return (
-                    <View
-                      key={i}
-                      className="flex-1 items-center rounded-input py-2.5"
-                      style={{
-                        backgroundColor: doneSet
-                          ? withAlpha(colors.accent, 0.14)
-                          : current
-                            ? withAlpha(colors.accent, 0.08)
-                            : colors.inputFill,
-                        borderWidth: 1,
-                        borderColor: current ? colors.accent : 'transparent',
-                      }}
-                    >
-                      {doneSet ? (
-                        <Check color={colors.accent} size={15} strokeWidth={3} />
-                      ) : (
-                        <Text
-                          className="font-sans-semibold text-[13px]"
-                          style={{ color: current ? colors.accent : colors.microLabel }}
-                        >
-                          {reps}
-                        </Text>
-                      )}
-                      <Text
-                        className="mt-0.5 font-sans text-[10px]"
-                        style={{ color: colors.microLabel }}
-                      >
-                        Set {i + 1}
-                      </Text>
-                    </View>
-                  );
-                })}
-              </View>
-            </View>
-
-            {exercise.notes ? (
-              <Text className="mt-4 font-sans text-sm leading-6 text-secondary">
-                {exercise.notes}
-              </Text>
-            ) : null}
-          </ScrollView>
-
-          <View className="mt-auto pt-4">
-            <Button
-              label={isLastSet ? "Finish exercise" : `Done \u2014 rest ${rest}s`}
-              loading={completeExercise.isPending}
-              onPress={finishSet}
-            />
-          </View>
-        </View>
+      ) : phase === 'active' ? (
+        <ExerciseStage
+          key={exercise.exerciseId}
+          title={exercise.title}
+          videoUri={videoUri ?? null}
+          count={count}
+          target={reps}
+          paused={paused}
+          onTogglePause={() => setPaused((p) => !p)}
+          onCountRep={() => setCount((c) => Math.min(reps, c + 1))}
+          onDone={() => setPhase('complete')}
+          onSkip={() => {
+            setCount(0);
+            setPhase('complete');
+          }}
+        />
+      ) : phase === 'complete' ? (
+        <MovementComplete
+          title={exercise.title}
+          count={count}
+          target={reps}
+          items={exercises.map((e) => ({ id: e.exerciseId, title: e.title }))}
+          index={index}
+          isLast={index + 1 >= total}
+          askEase={sessionEase.current === null}
+          ease={ease}
+          onChangeEase={setEase}
+          effort={effort}
+          onChangeEffort={setEffort}
+          saving={completeExercise.isPending}
+          onContinue={recordAndAdvance}
+          onKeepGoing={() => setPhase('active')}
+        />
       ) : (
-        // ── Rating ─────────────────────────────────────────────────────────────
-        <ScrollView
-          className="flex-1 px-6"
-          contentContainerStyle={{ paddingBottom: 24 }}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          <Text className="mt-4 font-sans-semibold text-xs uppercase tracking-[2px] text-accent">
-            {exercise.title}
-          </Text>
-          <Text className="mt-2 font-display-bold text-3xl leading-9 text-primary">
-            How did that feel?
-          </Text>
-          <Text className="mt-3 font-sans text-base leading-6 text-secondary">
-            Your answer tunes what we give you next.
-          </Text>
-
-          <View className="mt-7">
-            <RatingScale
-              value={ease}
-              onChange={setEase}
-              min={1}
-              tone="high-is-good"
-              lowLabel="Very hard"
-              highLabel="Very easy"
-            />
-          </View>
-
-          <Text className="mt-8 font-sans-semibold text-[15px] text-primary">
-            Anything to flag?
-          </Text>
-          <View className="mt-3 flex-row gap-3">
-            {(['tooHard', 'tooEasy'] as const).map((option) => {
-              const selected = effort === option;
-              return (
-                <Pressable
-                  key={option}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                  onPress={() => setEffort(selected ? null : option)}
-                  className="flex-1 items-center rounded-input py-3.5 active:opacity-80"
-                  style={{
-                    backgroundColor: selected ? withAlpha(colors.accent, 0.12) : colors.inputFill,
-                    borderWidth: 1,
-                    borderColor: selected ? colors.accent : colors.border,
-                  }}
-                >
-                  <Text
-                    className="font-sans-semibold text-[13px]"
-                    style={{ color: selected ? colors.accent : colors.textSecondary }}
-                  >
-                    {option === 'tooHard' ? 'Too hard' : 'Too easy'}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          <Text className="mt-2 font-sans text-[11px]" style={{ color: colors.microLabel }}>
-            We&apos;ll suggest a gentler or stronger version next time.
-          </Text>
-
-          <View className="mt-8 gap-3">
-            <Button
-              label={index + 1 >= total ? 'Finish session' : 'Next exercise'}
-              disabled={ease === null}
-              loading={completeExercise.isPending}
-              onPress={submitRating}
-            />
-            <Button label="Back to the video" variant="ghost" onPress={() => setPhase('watch')} />
-          </View>
-        </ScrollView>
+        <RecoveryTimer
+          seconds={REST_SECONDS}
+          // The pointer has already advanced by the time recovery runs, so the
+          // movement at `index` is the one coming up.
+          nextTitle={exercise.title}
+          nextThumbnail={resolveThumbnail(exercise)}
+          onDone={() => setPhase('ready')}
+        />
       )}
-
-      <SetPlanSheet
-        visible={planOpen}
-        exerciseTitle={exercise.title}
-        scheme={scheme}
-        rest={rest}
-        onChangeScheme={setScheme}
-        onChangeRest={setRest}
-        onClose={() => setPlanOpen(false)}
-        confirmLabel="Done"
-      />
     </SafeAreaView>
   );
 }

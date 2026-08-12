@@ -140,27 +140,26 @@ export const AUDIT_ACTIONS_REQUIRING_REASON = [
   'ACCOUNT_STATUS_CHANGED',
 ] as const;
 
-// ── Sets, reps and rest (session engine) ──────────────────────────────────────
+// ── Reps and rest (session engine) ────────────────────────────────────────────
 
 /**
- * Rep schemes the patient can pick from. Each entry is the reps for set 1, 2
- * and 3 in order — so the LENGTH of the array is the number of sets, and a
- * descending scheme like 15-12-10 is a pyramid, not a mistake.
+ * Rep counts a patient may choose for an exercise. One round of N reps, not a
+ * multi-set scheme — someone in pain on a mat at 6am needs one decision, not a
+ * prescription to interpret.
  *
- * TODO: CONFIRM the three schemes + defaults WITH DR. HARSHA
+ * TODO: CONFIRM the three options WITH DR. HARSHA
  */
-export const REP_SCHEMES = {
-  '10-10-10': [10, 10, 10],
-  '15-12-10': [15, 12, 10],
-  '5-5-5': [5, 5, 5],
-} as const;
+export const REP_OPTIONS = [5, 10, 20] as const;
+export type RepOption = (typeof REP_OPTIONS)[number];
+export const DEFAULT_REPS: RepOption = 10;
 
-export const REP_SCHEME_IDS = Object.keys(REP_SCHEMES) as (keyof typeof REP_SCHEMES)[];
-export type RepSchemeId = keyof typeof REP_SCHEMES;
+/** Recovery between exercises, in seconds. */
+export const REST_SECONDS = 30;
 
-/** Rest between sets, in seconds. 60 is the standard starting point. */
-export const REST_PRESETS = [60, 120, 180] as const;
-export type RestPreset = (typeof REST_PRESETS)[number];
-
-export const DEFAULT_REP_SCHEME: RepSchemeId = '10-10-10';
-export const DEFAULT_REST_SECONDS: RestPreset = 60;
+/**
+ * LEGACY — the earlier multi-set schemes. Kept only so ProgressDay documents
+ * written before the single-round redesign still validate; nothing writes these
+ * any more.
+ */
+export const LEGACY_REP_SCHEME_IDS = ['10-10-10', '15-12-10', '5-5-5'] as const;
+export type LegacyRepSchemeId = (typeof LEGACY_REP_SCHEME_IDS)[number];

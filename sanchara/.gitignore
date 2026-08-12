@@ -47,3 +47,6 @@ example
 
 # Android release signing — NEVER commit. Back this up separately.
 /credentials
+
+# Release artifacts — regenerable, and over GitHub's 100MB file limit.
+builds/

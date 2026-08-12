@@ -1,85 +1,61 @@
 /**
- * VideoStage — the exercise video itself.
+ * VideoStage — the demonstration clip, and nothing else.
  *
  * Mounted with a `key` of the exercise id by the player, so each exercise gets a
- * FRESH player rather than the parent juggling `replaceAsync` and stale
- * playback state. `useVideoPlayer` then always receives a concrete source, and
- * the hook releases the old player on unmount.
+ * FRESH player rather than the parent juggling `replaceAsync` and stale playback
+ * state. `useVideoPlayer` then always receives a concrete source, and the hook
+ * releases the old player on unmount.
  *
- * `playToEnd` is the natural cue that the set is finished, so it surfaces the
- * rating step without the patient having to reach for the phone.
+ * Two rules this component exists to enforce:
+ *
+ *  - `contentFit="contain"`, always. The clip's only job is to answer "am I
+ *    doing this right?", and a patient cannot check her spine, neck and hip
+ *    alignment against a body that has been cropped at the head. Letterbox
+ *    instead — black bars are a smaller cost than an invisible neck.
+ *  - No chrome. The old build painted its own play/pause/replay row over the
+ *    bottom of the frame, which put controls at the top of the screen once the
+ *    video moved up. Transport now lives with the rest of the controls in the
+ *    thumb zone, and playback is driven from the parent via `paused`.
  */
-import { useEvent, useEventListener } from 'expo';
+import { useEventListener } from 'expo';
 import { VideoView, useVideoPlayer } from 'expo-video';
-import { Pause, Play, RotateCcw } from 'lucide-react-native';
-import { Pressable, Text, View } from 'react-native';
-
-import { onImage } from '@/theme/tokens';
-import { useThemeColors } from '@/theme/useTheme';
+import { useEffect } from 'react';
+import { View } from 'react-native';
 
 interface VideoStageProps {
   uri: string;
-  /** Fired when the clip reaches its end. */
-  onPlayToEnd: () => void;
+  /** Parent-owned transport — the Pause control lives in the thumb zone. */
+  paused?: boolean;
+  /** Fired when the clip reaches its end. Only useful when `loop` is false. */
+  onPlayToEnd?: () => void;
 }
 
-export function VideoStage({ uri, onPlayToEnd }: VideoStageProps) {
-  const colors = useThemeColors();
-
+export function VideoStage({ uri, paused = false, onPlayToEnd }: VideoStageProps) {
   const player = useVideoPlayer(uri, (p) => {
     // Physio clips are short and demonstrative — looping lets the patient keep
-    // watching the form while they work through their own reps.
+    // checking her form for as long as she is working through her own reps.
     p.loop = true;
+    p.muted = true; // no soundtrack, and no surprise audio at 6:40am
     p.play();
   });
 
-  const { isPlaying } = useEvent(player, 'playingChange', { isPlaying: player.playing });
-  useEventListener(player, 'playToEnd', onPlayToEnd);
+  useEventListener(player, 'playToEnd', () => onPlayToEnd?.());
+
+  useEffect(() => {
+    if (paused) player.pause();
+    else player.play();
+  }, [paused, player]);
 
   return (
-    <View className="w-full flex-1 overflow-hidden rounded-card" style={{ backgroundColor: '#000' }}>
+    <View className="h-full w-full" style={{ backgroundColor: '#000' }}>
       <VideoView
         player={player}
         style={{ flex: 1 }}
         contentFit="contain"
         nativeControls={false}
         allowsPictureInPicture={false}
+        accessibilityLabel="Exercise demonstration"
       />
-
-      {/* Custom transport: the native controls' scrubber invites seeking around
-          a demo clip, which isn't what we want mid-exercise. */}
-      <View className="absolute bottom-0 left-0 right-0 flex-row items-center gap-3 px-4 py-4">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={isPlaying ? 'Pause video' : 'Play video'}
-          onPress={() => (isPlaying ? player.pause() : player.play())}
-          className="h-12 w-12 items-center justify-center rounded-pill active:opacity-80"
-          style={{ backgroundColor: colors.accent }}
-        >
-          {isPlaying ? (
-            <Pause color={colors.accentText} size={20} fill={colors.accentText} />
-          ) : (
-            <Play color={colors.accentText} size={20} fill={colors.accentText} />
-          )}
-        </Pressable>
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Restart video"
-          onPress={() => player.replay()}
-          className="h-12 w-12 items-center justify-center rounded-pill active:opacity-80"
-          style={{ backgroundColor: onImage.chipFill }}
-        >
-          <RotateCcw color={onImage.textPrimary} size={18} />
-        </Pressable>
-
-        <Text
-          className="ml-auto font-sans-semibold text-[11px]"
-          style={{ color: onImage.textSecondary, letterSpacing: 1.2 }}
-        >
-          LOOPING
-        </Text>
-      </View>
     </View>
   );
 }
