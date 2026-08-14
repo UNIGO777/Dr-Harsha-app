@@ -20,6 +20,15 @@ const envSchema = z.object({
     .enum(['development', 'test', 'production'])
     .default('development'),
   PORT: z.coerce.number().int().positive().default(5000),
+  /**
+   * Day-3 trial lockout. OFF by default: there is no payment gateway yet, so
+   * enforcing it would lock every patient out three days in with no way to pay.
+   * Set to `true` in the same change that ships subscriptions (M8).
+   */
+  ENFORCE_TRIAL_LOCKOUT: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
   MONGODB_URI: z
     .string()
     .min(1, 'MONGODB_URI is required (e.g. mongodb://localhost:27017/sanchara)'),
@@ -93,6 +102,14 @@ if (!parsed.success) {
 export type Env = z.infer<typeof envSchema>;
 
 export const env: Env = parsed.data;
+
+/**
+ * THE single source of truth for whether the trial lockout bites. Both the
+ * middleware and the soft `entitled` flag read this — they were previously two
+ * copies of the same rule kept in sync by a comment, which is exactly how a
+ * patient ends up passing one gate and failing the other.
+ */
+export const enforceTrialLockout = env.ENFORCE_TRIAL_LOCKOUT;
 
 export const isProd = env.NODE_ENV === 'production';
 export const isDev = env.NODE_ENV === 'development';

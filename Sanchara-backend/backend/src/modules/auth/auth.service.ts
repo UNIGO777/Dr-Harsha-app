@@ -12,7 +12,7 @@ import {
   verifyRefreshToken,
 } from '../../utils/jwt';
 import { sendOtpSms } from '../../services/sms.service';
-import { env, isProd } from '../../config/env';
+import { enforceTrialLockout, env, isProd } from '../../config/env';
 import type {
   AccountStatus,
   Gender,
@@ -244,11 +244,16 @@ export async function getUserContext(userId: string): Promise<UserContext | null
 
 /**
  * Soft entitlement check — the boolean form of the `requireActiveAccess` rule.
- * Keep this in sync with that middleware. M8: also return true for an active
- * Subscription (trial-independent).
+ * Both read `enforceTrialLockout` so the hard gate and this flag cannot drift.
+ * M8: also return true for an active Subscription (trial-independent).
  */
 function evaluateEntitlement(status: AccountStatus, trialEndDate?: Date): boolean {
   if (status !== 'active') return false; // waitlisted / locked are never entitled
+
+  // No payment gateway yet: an expired trial must not read as unentitled, or
+  // the app shows a subscription prompt the patient has no way to satisfy.
+  if (!enforceTrialLockout) return true;
+
   const trialValid = trialEndDate !== undefined && Date.now() <= trialEndDate.getTime();
   const hasActiveSubscription = false; // M8: replace with real subscription check
   return trialValid || hasActiveSubscription;

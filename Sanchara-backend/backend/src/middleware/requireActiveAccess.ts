@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
-import { isProd } from '../config/env';
+import { enforceTrialLockout, isProd } from '../config/env';
 import { ApiError } from '../utils/ApiError';
 import { getAccessContext } from '../modules/auth/auth.service';
 
@@ -49,9 +49,11 @@ export async function requireActiveAccess(
     // trial window is evaluated, so trial-only lockout works today.
     const hasActiveSubscription = false;
 
-    // Day-3 lockout is enforced in PRODUCTION only; in dev/test the 2-day trial
-    // is not enforced so local testing isn't blocked once the trial elapses.
-    if (isProd && trialEnded && !hasActiveSubscription) {
+    // Day-3 lockout is enforced in PRODUCTION only, and only when
+    // ENFORCE_TRIAL_LOCKOUT is on. It is OFF by default because there is no
+    // payment gateway yet: locking a patient out with no way to subscribe is
+    // not a paywall, it is just a dead app. Turn it on with M8.
+    if (enforceTrialLockout && isProd && trialEnded && !hasActiveSubscription) {
       throw new ApiError(403, 'Your free trial has ended', {
         details: { reason: 'trial_expired', requires: 'subscription_required' },
       });
