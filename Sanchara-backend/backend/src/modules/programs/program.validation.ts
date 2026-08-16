@@ -112,6 +112,9 @@ export const adminListProgramsQuerySchema = z.object({
 });
 
 export const listProgramsQuerySchema = z.object({
+  /** Case-insensitive match on the programme name. Same shape as the portal
+   *  filter — patients browsing to switch plans need to find one by name. */
+  search: z.string().trim().min(1).max(100).optional(),
   goalTag: z.string().trim().min(1).optional(),
   targetAreas: z.string().trim().min(1).optional(),
   difficultyLevel: z.enum(DIFFICULTIES).optional(),

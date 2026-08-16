@@ -186,7 +186,11 @@ export default function ProfileScreen() {
 
         {/* Current plan */}
         {plan ? (
-          <Section title="Your plan">
+          <Section
+            title="Your plan"
+            action="Change"
+            onAction={() => router.push('/(profile)/change-program')}
+          >
             <Row label="Program" value={plan.program?.name} />
             <Row
               label="Position"

@@ -202,7 +202,8 @@ export default function ProgramDetailScreen() {
       if (!switchExisting && isActiveEnrollmentConflict(e)) {
         Alert.alert(
           'Switch program?',
-          'You already have an active program. Switching will pause it.',
+          'Your current program is paused, not lost — come back to it any time and you carry on ' +
+            'from the same day.',
           [
             { text: 'Cancel', style: 'cancel' },
             { text: 'Switch', onPress: () => start(true) },

@@ -131,10 +131,16 @@ export async function getById(req: Request, res: Response, next: NextFunction): 
   }
 }
 
-/** GET /sessions/progress-days — set-by-set record, newest first. */
+/**
+ * GET /sessions/progress-days — the exercise record, newest first.
+ *
+ * Defaults to the CURRENT run of the patient's program. `?scope=all` returns
+ * every run, for a lifetime view.
+ */
 export async function progressDays(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const days = await sessionService.getProgressDays(userId(req));
+    const scope = req.query.scope === 'all' ? 'all' : 'current';
+    const days = await sessionService.getProgressDays(userId(req), 30, scope);
     res.json({ success: true, days });
   } catch (err) {
     next(err);

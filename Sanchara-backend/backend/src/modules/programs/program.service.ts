@@ -420,10 +420,35 @@ async function hydrateAdminDay(day: HydratedDocument<IProgramDay>): Promise<Admi
 }
 
 // ── Public reads ───────────────────────────────────────────────────────────────
+/**
+ * Ids of programs that actually have at least one day of content.
+ *
+ * "Published" is only an INTENT flag — a draft can be flipped published while
+ * still empty, and a patient who opens one gets a program with no exercises and
+ * no way forward. Everything patient-facing therefore filters on real content
+ * as well as on the flag, so a half-built program can never reach them however
+ * the flag was set.
+ *
+ * A `distinct` is cheap at this catalogue size (hundreds, not millions) and
+ * keeps the callers as plain `find` queries. If the catalogue ever grows past
+ * that, denormalise a `dayCount` onto Program instead.
+ */
+export async function getProgramIdsWithContent(): Promise<mongoose.Types.ObjectId[]> {
+  return ProgramDay.distinct('program');
+}
+
 export async function listPublishedPrograms(
   query: ListProgramsQuery
 ): Promise<{ data: ProgramSummary[]; pagination: { page: number; limit: number; total: number; totalPages: number } }> {
-  const filter: mongoose.QueryFilter<IProgram> = { isPublished: true, isActive: true };
+  const filter: mongoose.QueryFilter<IProgram> = {
+    isPublished: true,
+    isActive: true,
+    // An empty program is not browsable content, whatever its published flag says.
+    _id: { $in: await getProgramIdsWithContent() },
+  };
+  // escapeRegex matters: an unescaped term lets a user's search text alter the
+  // query itself (".*" would match everything, and a bad pattern can hang it).
+  if (query.search) filter.name = { $regex: escapeRegex(query.search), $options: 'i' };
   if (query.goalTag) filter.goalTag = query.goalTag;
   if (query.targetAreas) filter.targetAreas = query.targetAreas;
   if (query.difficultyLevel) filter.difficultyLevel = query.difficultyLevel;
@@ -564,6 +589,12 @@ export interface ProgramDetail extends ProgramSummary {
 export async function getProgramDetail(programId: string): Promise<ProgramDetail> {
   const program = await Program.findOne({ _id: programId, isPublished: true, isActive: true });
   if (!program) throw ApiError.notFound('Program not found');
+
+  // Published but empty is not something a patient can use: they would open it,
+  // enroll, and find no day to do. Treat it as absent rather than showing a
+  // dead end — the list hides these too, so this closes the direct-link route.
+  const hasContent = await ProgramDay.exists({ program: program._id });
+  if (!hasContent) throw ApiError.notFound('Program not found');
 
   const [levels, days] = await Promise.all([
     ProgramLevel.find({ program: programId }).sort({ levelNumber: 1 }),

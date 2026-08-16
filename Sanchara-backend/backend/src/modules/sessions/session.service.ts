@@ -15,6 +15,7 @@ import { ProgressDay } from '../../models/progressDay.model';
 import { DEFAULT_REPS, REST_SECONDS } from '../../constants/enums';
 import {
   advanceForCompletedDay,
+  getActiveEnrollmentId,
   getDailyLock,
   type AdvanceResult,
 } from '../enrollments/enrollment.service';
@@ -302,8 +303,15 @@ export async function startSession(
     }
   }
 
+  // Stamp WHICH RUN of the program this belongs to. Re-enrolling restarts at
+  // day 1, so program alone cannot tell this attempt from an earlier one.
+  // SHORT programs never enroll, so they legitimately have none.
+  const enrollmentId =
+    content.programType === 'SHORT' ? null : await getActiveEnrollmentId(userId);
+
   const session = await Session.create({
     user: new Types.ObjectId(userId),
+    enrollment: enrollmentId ? new Types.ObjectId(enrollmentId) : undefined,
     program: new Types.ObjectId(content.program),
     programDay: new Types.ObjectId(content.id),
     levelNumber: content.levelNumber,
@@ -567,6 +575,7 @@ async function recordProgressDay(
     (await ProgressDay.findOne({ user: session.user, date, programDay: session.programDay })) ??
     new ProgressDay({
       user: session.user,
+      enrollment: session.enrollment,
       program: session.program,
       programDay: session.programDay,
       session: session._id,
@@ -804,8 +813,32 @@ export interface ProgressDayCard {
  * uses to decide progression — Session history answers "did they turn up",
  * this answers "what did they actually lift".
  */
-export async function getProgressDays(userId: string, limit = 30): Promise<ProgressDayCard[]> {
-  const docs = await ProgressDay.find({ user: userId }).sort({ date: -1 }).limit(limit);
+/**
+ * The patient's exercise record, day by day.
+ *
+ * Scoped to the CURRENT RUN of their program by default. Switching programs
+ * always restarts at day 1, so an unscoped read would interleave "level 1 day 1"
+ * from this attempt with "level 1 day 1" from a previous one and present them as
+ * one continuous history — which is not something a clinician can safely read.
+ *
+ * `scope: 'all'` returns everything, for a lifetime view.
+ */
+export async function getProgressDays(
+  userId: string,
+  limit = 30,
+  scope: 'current' | 'all' = 'current'
+): Promise<ProgressDayCard[]> {
+  const filter: Record<string, unknown> = { user: userId };
+  if (scope === 'current') {
+    const enrollmentId = await getActiveEnrollmentId(userId);
+    // No active enrollment → no current run to report on. Returning the whole
+    // history here would be worse than returning nothing: it would look like
+    // progress on a program they are not doing.
+    if (!enrollmentId) return [];
+    filter.enrollment = enrollmentId;
+  }
+
+  const docs = await ProgressDay.find(filter).sort({ date: -1 }).limit(limit);
 
   const ids = [...new Set(docs.flatMap((d) => d.exercises.map((e) => e.exercise.toString())))];
   const views = ids.length ? await getExercisesByIds(ids) : [];

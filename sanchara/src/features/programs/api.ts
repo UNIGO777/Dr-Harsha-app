@@ -66,6 +66,10 @@ export interface ProgramFilters {
   difficultyLevel?: Difficulty;
   /** Defaults to STANDARD server-side; pass 'SHORT' for standalone quick sessions. */
   type?: ProgramType;
+  /** Case-insensitive match on the programme NAME (not description). Applied
+   *  server-side, so it searches every programme rather than only the pages
+   *  already fetched. */
+  search?: string;
 }
 
 export function useRecommendedPrograms() {

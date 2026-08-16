@@ -2,7 +2,7 @@ import { Program, type IProgram } from '../../models/program.model';
 import { ApiError } from '../../utils/ApiError';
 import { getImageUrl } from '../../services/video.service';
 import { getRecommendationProfile, type RecommendationProfile } from '../auth/auth.service';
-import type { ProgramSummary } from './program.service';
+import { getProgramIdsWithContent, type ProgramSummary } from './program.service';
 import type { HydratedDocument } from 'mongoose';
 import type { ExerciseHistoryLevel, Difficulty } from '../../constants/enums';
 
@@ -148,6 +148,8 @@ export async function getRecommendations(userId: string): Promise<Recommendation
     type: 'STANDARD',
     isPublished: true,
     isActive: true,
+    // Never recommend a program with no days in it — see program.service.
+    _id: { $in: await getProgramIdsWithContent() },
   });
 
   const scored = programs

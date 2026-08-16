@@ -38,6 +38,13 @@ export interface ISessionExercise {
 
 export interface ISession {
   user: Types.ObjectId;
+  /**
+   * WHICH RUN of the program this belongs to. A patient may enroll in the same
+   * program more than once — switching away and back always restarts at day 1 —
+   * so `program` alone cannot separate this attempt from the previous one.
+   * Absent on SHORT sessions, which never touch enrollment.
+   */
+  enrollment?: Types.ObjectId;
   program?: Types.ObjectId;
   programDay?: Types.ObjectId; // ref 'ProgramDay' (M2.5)
   levelNumber?: number; // snapshot: program level at session time (M2.5-L; NOT the user's difficulty level)
@@ -119,6 +126,7 @@ const sessionSchema = new Schema<ISession>(
       required: true,
       index: true,
     },
+    enrollment: { type: Schema.Types.ObjectId, ref: 'Enrollment' },
     program: { type: Schema.Types.ObjectId, ref: 'Program' },
     programDay: { type: Schema.Types.ObjectId, ref: 'ProgramDay' },
     levelNumber: { type: Number, min: 1 },
@@ -159,5 +167,7 @@ const sessionSchema = new Schema<ISession>(
 
 // Reverse-chronological history & calendar views for a user.
 sessionSchema.index({ user: 1, startedAt: -1 });
+// "everything from this run of this program", the read the progress views need.
+sessionSchema.index({ enrollment: 1, startedAt: -1 });
 
 export const Session = model<ISession>('Session', sessionSchema);

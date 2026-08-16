@@ -1,5 +1,6 @@
 import { Types, type HydratedDocument } from 'mongoose';
 import { Enrollment, type IEnrollment } from '../../models/enrollment.model';
+import { Session } from '../../models/session.model';
 import { ApiError } from '../../utils/ApiError';
 import { getImageUrl, getPlayableVideoUrl } from '../../services/video.service';
 import { getExercisesByIds } from '../exercises/exercise.service';
@@ -106,11 +107,43 @@ export async function enroll(
         details: { reason: 'active_enrollment_exists', hint: 'pass ?switch=true to switch programs' },
       });
     }
+
+    // A session already underway belongs to the OLD program's day, so it cannot
+    // survive the switch: left open it would keep the player on exercises that
+    // are no longer in the patient's plan, and anything recorded would be filed
+    // against a programDay they have left.
+    //
+    // Closing it is silent BY DESIGN. Blocking the switch to make them go and
+    // end it themselves is a chore that teaches nothing — they have already
+    // said what they want by switching. Marked ABANDONED rather than deleted so
+    // the partial work stays in the clinical record.
+    const now = new Date();
+    const openSessions = await Session.find({
+      user: userId,
+      state: { $nin: ['COMPLETED', 'ABANDONED'] },
+    });
+    for (const s of openSessions) {
+      const startedAt = s.startedAt ?? s.createdAt;
+      s.durationSeconds = Math.max(0, Math.round((now.getTime() - startedAt.getTime()) / 1000));
+      s.exercisesCompleted = s.exercises.length;
+      s.completion = s.exercises.length > 0 ? 'PARTIAL' : 'SKIPPED';
+      s.state = 'ABANDONED';
+      s.endedAt = now;
+      await s.save();
+    }
+
     active.status = 'PAUSED';
     await active.save();
   }
 
-  // Start at the program's first level (lowest levelNumber), day 1.
+  // Every enrollment starts at day 1, INCLUDING a return to a program the
+  // patient has done before. Restarting is the clinical intent: a body that has
+  // been off a program for weeks should not be dropped back into level 3.
+  //
+  // Nothing is lost by this. The earlier attempt keeps its own Enrollment row
+  // (PAUSED), and every Session and ProgressDay is stamped with the enrollment
+  // it belongs to, so each run through a program stays a separate, readable
+  // record rather than being merged into one confusing history.
   const levels = await getLevelsMeta(programId);
   const firstLevel = levels.length > 0 ? levels[0]!.levelNumber : 1;
 
@@ -131,6 +164,16 @@ export async function enroll(
 export async function getMyEnrollment(userId: string): Promise<EnrollmentView | null> {
   const active = await findActive(userId);
   return active ? toView(active) : null;
+}
+
+/**
+ * The active enrollment's id, or null. Sessions and ProgressDays are stamped
+ * with it so each RUN of a program keeps its own exercise history — re-enrolling
+ * restarts at day 1, so `program` alone would merge this attempt with the last.
+ */
+export async function getActiveEnrollmentId(userId: string): Promise<string | null> {
+  const active = await findActive(userId);
+  return active ? active.id : null;
 }
 
 /**

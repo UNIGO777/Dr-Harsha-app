@@ -49,6 +49,13 @@ export interface IProgressExercise {
 
 export interface IProgressDay {
   user: Types.ObjectId;
+  /**
+   * WHICH RUN of the program produced this day. Re-enrolling always restarts at
+   * day 1, so without this a second attempt's "level 1 day 1" is
+   * indistinguishable from the first — and a clinician reading the history
+   * would see two contradictory records for the same point in the program.
+   */
+  enrollment?: Types.ObjectId;
   program?: Types.ObjectId;
   programDay?: Types.ObjectId;
   /** The session this work was logged through. */
@@ -96,6 +103,7 @@ const progressExerciseSchema = new Schema<IProgressExercise>(
 const progressDaySchema = new Schema<IProgressDay>(
   {
     user: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    enrollment: { type: Schema.Types.ObjectId, ref: 'Enrollment' },
     program: { type: Schema.Types.ObjectId, ref: 'Program' },
     programDay: { type: Schema.Types.ObjectId, ref: 'ProgramDay' },
     session: { type: Schema.Types.ObjectId, ref: 'Session' },
@@ -118,6 +126,9 @@ progressDaySchema.index({ user: 1, date: 1, programDay: 1 }, { unique: true });
 
 // Clinician reads: "show me this patient's recent days".
 progressDaySchema.index({ user: 1, date: -1 });
+
+// "everything from this run of this program", kept separate from earlier runs.
+progressDaySchema.index({ enrollment: 1, date: -1 });
 
 /** Keep the rollups honest — they are derived, never client-supplied. */
 progressDaySchema.pre('save', function recalcTotals() {
