@@ -6,6 +6,7 @@ import * as ctrl from './patient.controller';
 import {
   listPatientsQuerySchema,
   patientIdParamSchema,
+  setLevelSchema,
   setStatusSchema,
 } from './patient.validation';
 
@@ -29,6 +30,14 @@ router.patch(
   '/:id/status',
   validate({ params: patientIdParamSchema, body: setStatusSchema }),
   ctrl.setStatus
+);
+
+// Re-tiering a patient is a clinical act: same ownership scoping as blocking,
+// and it always writes an audited reason.
+router.patch(
+  '/:id/level',
+  validate({ params: patientIdParamSchema, body: setLevelSchema }),
+  ctrl.setLevel
 );
 
 export default router;

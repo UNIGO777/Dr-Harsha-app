@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { ApiError } from '../../utils/ApiError';
 import * as patientService from './patient.service';
-import type { ListPatientsQuery, SetStatusInput } from './patient.validation';
+import type { ListPatientsQuery, SetLevelInput, SetStatusInput } from './patient.validation';
 
 function actor(req: Request): { userId: string; role: 'CLINICAL_STAFF' | 'ADMIN' } {
   if (!req.user) throw ApiError.unauthorized('Not authenticated');
@@ -32,6 +32,7 @@ export async function detail(req: Request, res: Response, next: NextFunction): P
 }
 
 /** PATCH /api/staff/patients/:id/status — block, unblock, or approve off waitlist. */
+
 export async function setStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { accountStatus, reason } = req.body as SetStatusInput;
@@ -42,6 +43,22 @@ export async function setStatus(req: Request, res: Response, next: NextFunction)
       reason
     );
     res.json({ success: true, patient });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** PATCH /api/staff/patients/:id/level — clinical override of the difficulty tier. */
+export async function setLevel(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { levelNumber, reason } = req.body as SetLevelInput;
+    const enrollment = await patientService.setPatientLevel(
+      actor(req),
+      req.params.id as string,
+      levelNumber,
+      reason
+    );
+    res.json({ success: true, enrollment });
   } catch (err) {
     next(err);
   }

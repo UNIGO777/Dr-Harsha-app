@@ -5,7 +5,7 @@ import { ApiError } from '../../utils/ApiError';
 import { recordAudit } from '../../services/audit.service';
 import { getVisiblePatientIds } from '../staff/staff.service';
 import { getHistory, getTrends } from '../sessions/session.service';
-import { getEnrollmentForStaff } from '../enrollments/enrollment.service';
+import { getEnrollmentForStaff, setEnrollmentLevel } from '../enrollments/enrollment.service';
 import type { AccountStatus, Gender, UserGroup, StaffRole } from '../../constants/enums';
 import type { TokenRole } from '../../utils/jwt';
 
@@ -164,6 +164,38 @@ export async function setAccountStatus(
   });
 
   return toRow(user);
+}
+
+/**
+ * Move a patient to a different difficulty tier.
+ *
+ * Goes through the same `scopedFilter` as every other patient write, so a
+ * clinician can only re-tier their OWN patients, and is audited with a reason —
+ * changing someone's difficulty is a clinical decision, not a settings tweak.
+ */
+export async function setPatientLevel(
+  actor: { userId: string; role: TokenRole },
+  patientId: string,
+  levelNumber: number,
+  reason: string
+): Promise<Awaited<ReturnType<typeof setEnrollmentLevel>>> {
+  const filter = await scopedFilter(actor, { _id: new Types.ObjectId(patientId) });
+  const user = await User.findOne(filter);
+  if (!user) throw ApiError.notFound('Patient not found');
+
+  const before = await getEnrollmentForStaff(user.id);
+  const enrollment = await setEnrollmentLevel(user.id, levelNumber);
+
+  await recordAudit({
+    actor: actor.userId,
+    actorRole: actor.role === 'ADMIN' ? 'ADMIN' : 'CLINICAL_STAFF',
+    action: 'LEVEL_OVERRIDE',
+    targetUser: user.id,
+    reason,
+    metadata: { from: before?.currentLevel, to: levelNumber, programId: enrollment.programId },
+  });
+
+  return enrollment;
 }
 
 export interface PatientDetail extends PatientRow {

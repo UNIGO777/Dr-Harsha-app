@@ -154,10 +154,19 @@ export function dayAlreadyCompleted(err: unknown): { unlocksOn?: string } | null
 export function useEnroll() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ programId, switchExisting }: { programId: string; switchExisting?: boolean }) => {
+    mutationFn: async ({
+      programId,
+      switchExisting,
+      levelNumber,
+    }: {
+      programId: string;
+      switchExisting?: boolean;
+      /** The difficulty tier the patient chose. Omitted → server picks the lowest. */
+      levelNumber?: number;
+    }) => {
       const { data } = await api.post<{ enrollment: EnrollmentView }>(
         endpoints.enrollments.root,
-        { programId },
+        { programId, levelNumber },
         { params: switchExisting ? { switch: true } : undefined },
       );
       return data.enrollment;

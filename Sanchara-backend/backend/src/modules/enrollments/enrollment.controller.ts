@@ -10,9 +10,14 @@ function userId(req: Request): string {
 
 export async function enroll(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { programId } = req.body as EnrollInput;
+    const { programId, levelNumber } = req.body as EnrollInput;
     const { switch: switchExisting } = req.query as unknown as EnrollQuery;
-    const enrollment = await enrollmentService.enroll(userId(req), programId, Boolean(switchExisting));
+    const enrollment = await enrollmentService.enroll(
+      userId(req),
+      programId,
+      Boolean(switchExisting),
+      levelNumber
+    );
     res.status(201).json({ success: true, enrollment });
   } catch (err) {
     next(err);

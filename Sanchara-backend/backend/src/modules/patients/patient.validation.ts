@@ -24,6 +24,13 @@ export const setStatusSchema = z.object({
   reason: z.string().trim().min(3, 'Give a reason (recorded in the audit log)').max(500),
 });
 
+/** Clinical override of a patient's difficulty tier. Always audited. */
+export const setLevelSchema = z.object({
+  levelNumber: z.number().int().min(1).max(50),
+  reason: z.string().trim().min(3, 'Give a reason (recorded in the audit log)').max(500),
+});
+
 export type SetStatusInput = z.infer<typeof setStatusSchema>;
+export type SetLevelInput = z.infer<typeof setLevelSchema>;
 
 export type ListPatientsQuery = z.infer<typeof listPatientsQuerySchema>;

@@ -163,10 +163,13 @@ export default function SessionPlayerScreen() {
       }
       const result = await completeSession.mutateAsync({ sessionId: session.sessionId });
       router.replace('/(app)/(tabs)/home');
+      // Finishing your tier finishes the program — there is no automatic
+      // promotion to the next level any more, so no "level up" case exists.
       if (result.enrollment?.programCompleted) {
-        Alert.alert('Program complete', 'You finished every level. Wonderful work.');
-      } else if (result.enrollment?.levelAdvanced) {
-        Alert.alert('Level up', `You've moved to level ${result.enrollment.currentLevel}.`);
+        Alert.alert(
+          'Program complete',
+          'You finished every day at this level. Wonderful work — pick another level any time.',
+        );
       }
     } catch {
       Alert.alert('Could not finish', 'Something went wrong saving your session.');

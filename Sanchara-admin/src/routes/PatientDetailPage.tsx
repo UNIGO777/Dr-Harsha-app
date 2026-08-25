@@ -1,28 +1,32 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { AlertTriangle, ArrowLeft, Ban, CircleCheck, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Ban, CircleCheck, Layers, ShieldCheck } from 'lucide-react';
 
 import { errorMessage } from '@/api/client';
 import { PageHeader } from '@/components/PageHeader';
 import { Badge, Button, EmptyState, ErrorState, Input, Modal, Spinner } from '@/components/ui';
 import {
   usePatientDetail,
+  useSetPatientLevel,
   useSetPatientStatus,
   type AccountStatus,
   type PatientDetail,
 } from '@/features/patients/api';
+import { useProgramDetail } from '@/features/programs/api';
 
 /**
  * Patient record for clinical staff.
  *
- * Blocking a patient is available here (audited, reversible). Assigning
- * programs and level overrides still need their own audited endpoints, so they
- * are deliberately absent rather than faked.
+ * Blocking a patient and overriding their difficulty tier are both available
+ * here — audited, reversible, and each requiring a written reason. Assigning a
+ * different program still needs its own audited endpoint, so it is deliberately
+ * absent rather than faked.
  */
 export function PatientDetailPage() {
   const { id } = useParams<{ id: string }>();
   const detail = usePatientDetail(id);
   const [statusChange, setStatusChange] = useState<AccountStatus | null>(null);
+  const [levelChange, setLevelChange] = useState(false);
 
   if (detail.isLoading) return <Spinner />;
   if (detail.error || !detail.data) {
@@ -162,9 +166,19 @@ export function PatientDetailPage() {
                     ` · ${p.enrollment.completedLevels.length} level(s) complete`}
                 </p>
               </div>
-              <Badge tone={p.enrollment.status === 'ACTIVE' ? 'mint' : 'neutral'}>
-                {p.enrollment.status}
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge tone={p.enrollment.status === 'ACTIVE' ? 'mint' : 'neutral'}>
+                  {p.enrollment.status}
+                </Badge>
+                {/* Levels are difficulty tiers the patient chose, and nothing
+                    promotes them automatically — so this override is the only
+                    way someone moves between them clinically. */}
+                {p.enrollment.status === 'ACTIVE' && p.enrollment.totalLevels > 0 && (
+                  <Button variant="ghost" onClick={() => setLevelChange(true)}>
+                    <Layers size={15} /> Change level
+                  </Button>
+                )}
+              </div>
             </div>
             <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-hi">
               <div
@@ -230,7 +244,7 @@ export function PatientDetailPage() {
       </Section>
 
       <p className="mt-8 text-center text-xs text-ink-faint">
-        Assigning programs and level overrides need their own audited endpoints — not built yet.
+        Assigning a different program needs its own audited endpoint — not built yet.
       </p>
 
       {statusChange && (
@@ -239,6 +253,16 @@ export function PatientDetailPage() {
           patientName={p.name ?? 'this patient'}
           target={statusChange}
           onClose={() => setStatusChange(null)}
+        />
+      )}
+
+      {levelChange && p.enrollment && (
+        <LevelModal
+          patientId={p.id}
+          patientName={p.name ?? 'this patient'}
+          programId={p.enrollment.programId}
+          currentLevel={p.enrollment.currentLevel}
+          onClose={() => setLevelChange(false)}
         />
       )}
     </div>
@@ -406,6 +430,128 @@ function StatusModal({
             disabled={reason.trim().length < 3}
           >
             {blocking ? 'Block patient' : 'Restore access'}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/**
+ * Moves a patient to a different difficulty tier.
+ *
+ * Levels are tiers the PATIENT picked when starting ("easy" / "Medium" /
+ * "Hard"), and nothing promotes them automatically — so this is the clinical
+ * override for when the tier they chose is wrong for them.
+ *
+ * The reset warning is stated plainly rather than buried: day 3 of "easy" and
+ * day 3 of "Hard" are different work, so the day counter cannot carry across
+ * without skipping days the patient has never done.
+ */
+function LevelModal({
+  patientId,
+  patientName,
+  programId,
+  currentLevel,
+  onClose,
+}: {
+  patientId: string;
+  patientName: string;
+  programId: string;
+  currentLevel: number;
+  onClose: () => void;
+}) {
+  const setLevel = useSetPatientLevel(patientId);
+  const { data: program, isLoading } = useProgramDetail(programId);
+  const [target, setTarget] = useState<number | null>(null);
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const levels = program?.levels ?? [];
+
+  return (
+    <Modal title={`Change level for ${patientName}`} onClose={onClose}>
+      <form
+        className="space-y-4"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setError(null);
+          if (target === null) return;
+          try {
+            await setLevel.mutateAsync({ levelNumber: target, reason });
+            onClose();
+          } catch (err) {
+            setError(errorMessage(err, 'Could not change the level'));
+          }
+        }}
+      >
+        <p className="text-sm text-ink-dim">
+          Their day progress at this level will reset to Day 1. Completed sessions stay in their
+          record.
+        </p>
+
+        {isLoading ? (
+          <Spinner />
+        ) : levels.length === 0 ? (
+          <p className="text-sm text-ink-dim">This program has no levels to choose from.</p>
+        ) : (
+          <div className="space-y-2">
+            {levels.map((l) => {
+              const isCurrent = l.levelNumber === currentLevel;
+              const selected = l.levelNumber === target;
+              return (
+                <button
+                  key={l.levelNumber}
+                  type="button"
+                  disabled={isCurrent}
+                  onClick={() => setTarget(l.levelNumber)}
+                  className={[
+                    'flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left transition',
+                    isCurrent
+                      ? 'cursor-not-allowed border-surface-hi bg-surface-hi/40 opacity-60'
+                      : selected
+                        ? 'border-mint bg-mint/10'
+                        : 'border-surface-hi hover:border-mint/50',
+                  ].join(' ')}
+                >
+                  <span className="text-sm text-ink">
+                    Level {l.levelNumber}
+                    {l.title ? ` · ${l.title}` : ''}
+                  </span>
+                  <span className="text-xs text-ink-faint">
+                    {isCurrent ? 'current' : `${l.dayCount} day${l.dayCount === 1 ? '' : 's'}`}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        <Input
+          label="Reason (recorded in the audit log)"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="e.g. Reported too easy for two weeks"
+          required
+        />
+
+        {error && (
+          <p role="alert" className="text-sm text-danger">
+            {error}
+          </p>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            variant="primary"
+            busy={setLevel.isPending}
+            disabled={target === null || reason.trim().length < 3}
+          >
+            Change level
           </Button>
         </div>
       </form>

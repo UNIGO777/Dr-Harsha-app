@@ -14,10 +14,21 @@ import type { EnrollmentStatus, Difficulty } from '../../constants/enums';
 import { clinicDateString, nextClinicDate } from '../../utils/clinicDate';
 
 /**
- * Enrollments service (M2.5-L). Owns the Enrollment model. Progress is now
- * level-wise: the user advances day-by-day WITHIN a level; finishing a level's
- * days unlocks the next level; finishing the last level completes the program.
- * Flat (level-less) programs keep the old day-only behaviour.
+ * Enrollments service (M2.5-L). Owns the Enrollment model.
+ *
+ * LEVELS ARE DIFFICULTY TIERS, NOT CHAPTERS. A program's levels are "easy",
+ * "Medium", "Hard" — the patient picks ONE when they start and stays on it.
+ * Progress runs day-by-day within that tier, and finishing its days completes
+ * the program. Nothing promotes anyone to the next level automatically; moving
+ * tiers is an explicit choice, either the patient's (re-enroll) or the
+ * clinician's (`setEnrollmentLevel`, audited).
+ *
+ * This replaced a day-driven model where finishing "easy" silently pushed the
+ * patient into "Medium" — which, for a 2-day tier, meant being handed harder
+ * work after two sessions with no clinical decision behind it.
+ *
+ * Flat (level-less) programs keep the day-only behaviour, bounded by
+ * `durationDays`.
  *
  * A user may hold only ONE ACTIVE enrollment at a time (enforced here).
  */
@@ -45,12 +56,13 @@ async function toView(enrollment: HydratedDocument<IEnrollment>): Promise<Enroll
   let totalDays: number | undefined;
   let done: number;
   if (levels.length > 0) {
-    totalDays = levels.reduce((s, l) => s + l.dayCount, 0);
-    done =
-      enrollment.completedLevels.reduce(
-        (s, ln) => s + (levels.find((l) => l.levelNumber === ln)?.dayCount ?? 0),
-        0
-      ) + enrollment.completedDays.length;
+    // Progress is measured WITHIN the chosen tier, not across the whole
+    // catalogue of tiers. A patient on "easy" does easy's days and is then
+    // finished — counting Medium's and Hard's days against them would peg
+    // someone who completed their program at a third done.
+    const tier = levels.find((l) => l.levelNumber === enrollment.currentLevel);
+    totalDays = tier?.dayCount;
+    done = enrollment.completedDays.length;
   } else {
     totalDays = program?.durationDays;
     done = enrollment.completedDays.length;
@@ -89,7 +101,8 @@ async function loadOwned(userId: string, enrollmentId: string): Promise<Hydrated
 export async function enroll(
   userId: string,
   programId: string,
-  switchExisting: boolean
+  switchExisting: boolean,
+  levelNumber?: number
 ): Promise<EnrollmentView> {
   const program = await getProgramMeta(programId);
   if (!program) throw ApiError.notFound('Program not found');
@@ -145,12 +158,26 @@ export async function enroll(
   // it belongs to, so each run through a program stays a separate, readable
   // record rather than being merged into one confusing history.
   const levels = await getLevelsMeta(programId);
-  const firstLevel = levels.length > 0 ? levels[0]!.levelNumber : 1;
+
+  // THE PATIENT PICKS THEIR TIER.
+  //
+  // Levels are difficulty tiers ("easy" / "Medium" / "Hard"), not sequential
+  // phases, so which one someone is on is a CHOICE made when starting the
+  // program — never something the day counter walks them into. Falling back to
+  // the lowest level keeps older clients (and any caller that omits it) working.
+  const chosen = levelNumber ?? (levels.length > 0 ? levels[0]!.levelNumber : 1);
+  if (levels.length > 0 && !levels.some((l) => l.levelNumber === chosen)) {
+    throw ApiError.badRequest(
+      `Level ${chosen} does not exist in this program (available: ${levels
+        .map((l) => l.levelNumber)
+        .join(', ')})`
+    );
+  }
 
   const enrollment = await Enrollment.create({
     user: new Types.ObjectId(userId),
     program: new Types.ObjectId(programId),
-    currentLevel: firstLevel,
+    currentLevel: chosen,
     currentDay: 1,
     completedDays: [],
     completedLevels: [],
@@ -174,6 +201,50 @@ export async function getMyEnrollment(userId: string): Promise<EnrollmentView | 
 export async function getActiveEnrollmentId(userId: string): Promise<string | null> {
   const active = await findActive(userId);
   return active ? active.id : null;
+}
+
+/**
+ * Move a patient to a different difficulty tier — the clinical override.
+ *
+ * A patient picks their tier when they start, but Dr. Harsha overrules that:
+ * someone who reports "too easy" for a week belongs on Medium, and someone in
+ * pain belongs on easy regardless of what they chose.
+ *
+ * Day progress within the tier is RESET, because day 3 of "easy" and day 3 of
+ * "Hard" are different work — carrying the counter across would skip days of
+ * the new tier the patient has never done. Completed-day history for the old
+ * tier is preserved in the ProgressDay/Session records, which are stamped with
+ * this enrollment.
+ */
+export async function setEnrollmentLevel(
+  userId: string,
+  levelNumber: number
+): Promise<EnrollmentView> {
+  const enrollment = await findActive(userId);
+  if (!enrollment) throw ApiError.notFound('This patient has no active enrollment');
+
+  const programId = enrollment.program.toString();
+  const levels = await getLevelsMeta(programId);
+  if (levels.length === 0) {
+    throw ApiError.badRequest('This program has no levels to choose from');
+  }
+  if (!levels.some((l) => l.levelNumber === levelNumber)) {
+    throw ApiError.badRequest(
+      `Level ${levelNumber} does not exist in this program (available: ${levels
+        .map((l) => l.levelNumber)
+        .join(', ')})`
+    );
+  }
+  if (enrollment.currentLevel === levelNumber) {
+    throw ApiError.badRequest('This patient is already on that level');
+  }
+
+  enrollment.currentLevel = levelNumber;
+  enrollment.currentDay = 1;
+  enrollment.completedDays = [];
+  await enrollment.save();
+
+  return toView(enrollment);
 }
 
 /**
@@ -332,7 +403,11 @@ export interface AdvanceResult {
   status?: EnrollmentStatus;
   completedDays?: number[];
   completedLevels?: number[];
-  /** True when this completion finished the level and moved to the next one. */
+  /**
+   * DEAD as of the difficulty-tier model — levels are chosen, never advanced
+   * into, so this is never set. Kept on the type only so older app builds that
+   * still read it keep type-checking against this API.
+   */
   levelAdvanced?: boolean;
   /** True when this completion finished the whole program. */
   programCompleted?: boolean;
@@ -370,7 +445,6 @@ export async function advanceForCompletedDay(
   if (!enrollment) return { advanced: false };
 
   const levels = await getLevelsMeta(programId);
-  let levelAdvanced = false;
   let programCompleted = false;
 
   if (levels.length > 0) {
@@ -385,19 +459,17 @@ export async function advanceForCompletedDay(
 
     const level = levels.find((l) => l.levelNumber === enrollment.currentLevel);
     if (level && enrollment.currentDay > level.dayCount) {
-      // LEVEL COMPLETE → unlock the next level (or finish the program).
+      // TIER COMPLETE → the program is done.
+      //
+      // NO automatic promotion to the next level. Levels are difficulty tiers
+      // the patient chose when starting, not chapters to be marched through:
+      // silently moving someone from "easy" to "Hard" because they finished two
+      // days is precisely the bug this replaced. Moving up is a fresh, explicit
+      // choice — theirs from the app, or Dr. Harsha's from the portal.
       enrollment.completedLevels.push(enrollment.currentLevel);
-      const next = levels.find((l) => l.levelNumber > enrollment.currentLevel);
-      if (next) {
-        enrollment.currentLevel = next.levelNumber;
-        enrollment.currentDay = 1;
-        enrollment.completedDays = [];
-        levelAdvanced = true;
-      } else {
-        enrollment.status = 'COMPLETED';
-        enrollment.completedAt = new Date();
-        programCompleted = true;
-      }
+      enrollment.status = 'COMPLETED';
+      enrollment.completedAt = new Date();
+      programCompleted = true;
     }
   } else {
     // Flat (level-less) path — original day-only behaviour.
@@ -427,7 +499,6 @@ export async function advanceForCompletedDay(
     status: enrollment.status,
     completedDays: enrollment.completedDays,
     completedLevels: enrollment.completedLevels,
-    levelAdvanced,
     programCompleted,
     nextUnlocksOn: nextClinicDate(enrollment.lastCompletedOn),
   };

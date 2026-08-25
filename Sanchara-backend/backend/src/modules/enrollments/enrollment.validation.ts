@@ -4,6 +4,12 @@ const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid id');
 
 export const enrollSchema = z.object({
   programId: objectId,
+  /**
+   * The DIFFICULTY TIER the patient picks when starting the program
+   * ("easy" / "Medium" / "Hard"). Optional for older clients, which fall back
+   * to the program's lowest level.
+   */
+  levelNumber: z.number().int().min(1).max(50).optional(),
 });
 
 export const enrollQuerySchema = z.object({

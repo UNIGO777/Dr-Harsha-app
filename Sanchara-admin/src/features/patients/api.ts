@@ -134,3 +134,29 @@ export function useSetPatientStatus(id: string) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['patients'] }),
   });
 }
+
+/**
+ * Move a patient to a different difficulty tier.
+ *
+ * Levels are tiers ("easy" / "Medium" / "Hard") the patient chose when they
+ * started, not chapters they progress through — so nothing promotes them
+ * automatically, and this is the clinical override when the tier they picked
+ * turns out to be wrong for them.
+ *
+ * Day progress within the tier RESETS: day 3 of "easy" and day 3 of "Hard" are
+ * different work, so carrying the counter across would skip days they have
+ * never done. A reason is mandatory and is written to the audit log.
+ */
+export function useSetPatientLevel(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ levelNumber, reason }: { levelNumber: number; reason: string }) => {
+      const { data } = await api.patch<{ enrollment: PatientEnrollment }>(
+        `/staff/patients/${id}/level`,
+        { levelNumber, reason },
+      );
+      return data.enrollment;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['patients'] }),
+  });
+}
