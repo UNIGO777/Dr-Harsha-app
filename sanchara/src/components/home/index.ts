@@ -1,8 +1,6 @@
 export { WarmRing } from './WarmRing';
-export { LevelSegments } from './LevelSegments';
 export { SessionCard } from './SessionCard';
 export { DayCompleteCard } from './DayCompleteCard';
-export { JourneyRow } from './JourneyRow';
 export { WeekCard } from './WeekCard';
 export { WalletCard } from './WalletCard';
 export { InsightCard } from './InsightCard';

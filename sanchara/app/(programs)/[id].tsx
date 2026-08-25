@@ -2,9 +2,8 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Check, Gauge, Moon, PersonStanding, Play } from 'lucide-react-native';
-import { useState } from 'react';
-import { Alert, ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { Gauge, Moon, PersonStanding, Play } from 'lucide-react-native';
+import { Alert, ActivityIndicator, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ProgramsHeader } from '@/components/programs/ProgramsHeader';
@@ -109,50 +108,22 @@ function MetaCard({
 }
 
 /**
- * One difficulty tier, selectable.
+ * One difficulty tier, with its days beneath it — READ ONLY.
  *
- * Levels are tiers ("easy" / "Medium" / "Hard"), NOT chapters — the patient
- * picks one here and stays on it. So this is a radio, not a table of contents:
- * tapping chooses the tier, and only the chosen one lists its days, which keeps
- * the decision in front of them instead of buried under thirty day rows.
+ * This is a description of what the program contains, not a chooser: picking a
+ * level happens on its own screen (`select-level`), because it decides what the
+ * patient's body is asked to do and deserves more than a control tucked under a
+ * day list. Levels are alternatives to choose between, never a sequence to work
+ * through — nothing here should suggest Level 2 comes "after" Level 1.
  *
  * Day numbers restart inside every level (Level 2 begins again at Day 1), so
  * rows must key on the day id, not dayNumber, which repeats across levels.
  */
-function LevelSection({
-  level,
-  selected,
-  onSelect,
-}: {
-  level: PublicLevel;
-  selected: boolean;
-  onSelect: () => void;
-}) {
+function LevelSection({ level }: { level: PublicLevel }) {
   const colors = useThemeColors();
   return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityState={{ selected }}
-      accessibilityLabel={`Level ${level.levelNumber}${level.title ? `, ${level.title}` : ''}, ${level.dayCount} days`}
-      onPress={onSelect}
-      className="rounded-card p-4 active:opacity-90"
-      style={{
-        backgroundColor: selected ? withAlpha(colors.accent, 0.1) : colors.surface,
-        borderWidth: selected ? 2 : 1,
-        borderColor: selected ? colors.accent : colors.border,
-      }}
-    >
+    <View>
       <View className="mb-3 flex-row items-center gap-2">
-        <View
-          className="h-5 w-5 items-center justify-center rounded-pill"
-          style={{
-            backgroundColor: selected ? colors.accent : 'transparent',
-            borderWidth: selected ? 0 : 1.5,
-            borderColor: colors.border,
-          }}
-        >
-          {selected ? <Check color={colors.accentText} size={12} strokeWidth={3.5} /> : null}
-        </View>
         <Text
           className="font-sans-semibold text-[11px]"
           style={{ color: colors.accent, letterSpacing: 1.6 }}
@@ -174,14 +145,12 @@ function LevelSection({
         </Text>
       </View>
 
-      {selected ? (
-        <View className="gap-3">
-          {level.days.map((d) => (
-            <DayRow key={d.id} day={d} />
-          ))}
-        </View>
-      ) : null}
-    </Pressable>
+      <View className="gap-3">
+        {level.days.map((d) => (
+          <DayRow key={d.id} day={d} />
+        ))}
+      </View>
+    </View>
   );
 }
 
@@ -230,22 +199,17 @@ export default function ProgramDetailScreen() {
   const enroll = useEnroll();
 
   /**
-   * The difficulty tier the patient is choosing. Levels are tiers, not chapters:
-   * this is the ONE decision that determines what they'll be doing, and they
-   * stay on it — nothing promotes them automatically.
+   * Enrolling is a TWO-STEP flow: this page describes the program, the next one
+   * asks which level. Levelled programs therefore never enroll from here — a
+   * level is the choice that decides what the patient's body actually does, and
+   * it must be made deliberately rather than defaulted to on a Start tap.
    *
-   * `null` until the program loads, then defaulted to the lowest level below.
+   * Level-less programs have nothing to choose, so they enroll directly.
    */
-  const [level, setLevel] = useState<number | null>(null);
-
   async function start(switchExisting?: boolean) {
     if (!id) return;
     try {
-      // `level` is null until they actually tap a tier, so fall back to the
-      // same lowest-level default the picker shows — otherwise a straight tap
-      // on Start would send nothing and silently rely on server defaulting.
-      const levelNumber = level ?? program?.levels[0]?.levelNumber;
-      await enroll.mutateAsync({ programId: id, switchExisting, levelNumber });
+      await enroll.mutateAsync({ programId: id, switchExisting });
       router.replace('/(app)/(tabs)/home');
     } catch (e: unknown) {
       if (!switchExisting && isActiveEnrollmentConflict(e)) {
@@ -312,7 +276,6 @@ export default function ProgramDetailScreen() {
   // Default to the gentlest tier once the program is known. Defaulting to
   // anything harder would put a patient who just taps Start on work their
   // clinician never chose for them.
-  const chosenLevel = level ?? program.levels[0]?.levelNumber ?? null;
 
   return (
     <View className="flex-1 bg-base">
@@ -363,7 +326,7 @@ export default function ProgramDetailScreen() {
               rendering `days` alone showed nothing at all for them. */}
           <View className="mt-9 flex-row items-center justify-between">
             <Text className="font-sans-semibold text-xs uppercase tracking-[2px] text-accent">
-              {hasLevels ? 'Choose your level' : 'Structure'}
+              What&apos;s inside
             </Text>
             <Text className="font-sans text-xs uppercase tracking-wide text-micro">
               {hasLevels ? `${program.totalLevels} levels · ` : ''}
@@ -374,17 +337,12 @@ export default function ProgramDetailScreen() {
           {hasLevels ? (
             <>
               <Text className="mt-2 font-sans text-[13px] leading-5 text-secondary">
-                Pick the level that suits you now. You&apos;ll stay on it for the whole program —
-                Dr. Harsha can move you if it turns out to be the wrong fit.
+                {program.totalLevels} levels to choose from — you pick one and stay on it. They are
+                alternatives, not stages to work through.
               </Text>
-              <View className="mt-4 gap-3">
+              <View className="mt-5 gap-7">
                 {program.levels.map((lvl) => (
-                  <LevelSection
-                    key={lvl.levelNumber}
-                    level={lvl}
-                    selected={lvl.levelNumber === chosenLevel}
-                    onSelect={() => setLevel(lvl.levelNumber)}
-                  />
+                  <LevelSection key={lvl.levelNumber} level={lvl} />
                 ))}
               </View>
             </>
@@ -408,13 +366,13 @@ export default function ProgramDetailScreen() {
         className="absolute bottom-0 left-0 right-0 border-t border-border bg-base px-6 pt-3"
       >
         <Button
-          label={
-            hasLevels && chosenLevel !== null
-              ? `Start · ${program.levels.find((l) => l.levelNumber === chosenLevel)?.title ?? `Level ${chosenLevel}`}`
-              : 'Start This Program'
-          }
+          label={hasLevels ? 'Choose your level' : 'Start This Program'}
           loading={enroll.isPending}
-          onPress={() => start()}
+          onPress={() =>
+            hasLevels
+              ? router.push({ pathname: '/(programs)/select-level', params: { programId: id } })
+              : start()
+          }
         />
       </View>
     </View>

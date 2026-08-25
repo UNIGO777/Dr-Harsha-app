@@ -25,8 +25,6 @@ import {
   BookConsultationSheet,
   DayCompleteCard,
   InsightCard,
-  JourneyRow,
-  LevelSegments,
   QuickSessionsRow,
   SectionHeader,
   SessionCard,
@@ -42,6 +40,7 @@ import { useNotifications } from '@/features/notifications/useNotifications';
 import { resolveThumbnail } from '@/lib/media';
 import { specialist } from '@/mocks/home';
 import { LOW_BALANCE_INR, daysRemaining, useWalletStore } from '@/store/walletStore';
+import { withAlpha } from '@/theme/tokens';
 import { useThemeColors } from '@/theme/useTheme';
 
 /** Fallback photo for a program day that has no thumbnail of its own yet. */
@@ -252,13 +251,24 @@ export default function HomeScreen() {
                   totalDays={ring.totalDays}
                   accessibilityText={ring.accessibilityText}
                 />
-                <View className="mt-7 w-full px-2">
-                  <LevelSegments
-                    totalLevels={Math.max(1, enrollment.totalLevels)}
-                    currentLevel={enrollment.currentLevel}
-                    currentProgress={levelProgress}
-                  />
-                </View>
+                {/* The level is a SETTING, not a stage reached. Showing
+                    "Level 1 of 3" implied a ladder to climb; it is a difficulty
+                    the patient was placed on, and only Dr. Harsha moves it. */}
+                {home.currentLevel ? (
+                  <View className="mt-6 w-full items-center">
+                    <View
+                      className="rounded-pill px-4 py-1.5"
+                      style={{ backgroundColor: withAlpha(colors.accent, 0.12) }}
+                    >
+                      <Text
+                        className="font-sans-semibold text-[11px]"
+                        style={{ color: colors.accent, letterSpacing: 1.4 }}
+                      >
+                        YOUR LEVEL · {home.currentLevel.title.toUpperCase()}
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
               </View>
 
               {/* Today's session */}
@@ -322,45 +332,6 @@ export default function HomeScreen() {
                 )}
               </View>
 
-              {/* Level roadmap.
-                  Hidden for FLAT programmes, which genuinely have no levels —
-                  but a FAILED programme fetch also yields zero levels, and
-                  silently dropping the section there looks like a missing
-                  feature rather than a network problem. */}
-              {home.levels.length > 0 || home.levelsUnavailable ? (
-                <View className="pt-8">
-                  <View className="px-5">
-                    <SectionHeader
-                      label="YOUR JOURNEY"
-                      actionLabel="View plan"
-                      onAction={() => router.push('/(programs)')}
-                    />
-                  </View>
-                  {home.levelsUnavailable ? (
-                    <View className="px-5">
-                      <Pressable
-                        accessibilityRole="button"
-                        onPress={home.retryProgram}
-                        className="flex-row items-center rounded-card border border-border bg-surface p-4 active:opacity-80"
-                      >
-                        <Text className="flex-1 font-sans text-[13px] text-secondary">
-                          Couldn&apos;t load your levels.
-                        </Text>
-                        <Text
-                          className="font-sans-semibold text-[13px]"
-                          style={{ color: colors.accent }}
-                        >
-                          Retry
-                        </Text>
-                      </Pressable>
-                    </View>
-                  ) : (
-                    <View className="pl-5">
-                      <JourneyRow levels={home.levels} />
-                    </View>
-                  )}
-                </View>
-              ) : null}
             </>
           ) : (
             /* Not enrolled */

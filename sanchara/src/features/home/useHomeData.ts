@@ -255,14 +255,15 @@ export function useHomeData() {
     today: todayQuery.data ?? null,
     program: programQuery.data ?? null,
     /**
-     * The level roadmap is built from the PROGRAM DETAIL, not the enrollment.
-     * When that request fails, `levels` is empty and looks identical to a flat
-     * programme — so the "Your journey" section silently vanished with nothing
-     * to say why. These let the screen tell the two apart.
+     * Kept for callers that still want the raw level content. The home screen
+     * no longer renders a level roadmap: levels are a SETTING the patient was
+     * placed on, not a route they travel, so showing them as a journey with
+     * locked stages ahead misrepresented how the programme works.
      */
     levelsUnavailable: programQuery.isError,
     retryProgram: () => void programQuery.refetch(),
     levels,
+    /** The tier the patient is ON. Named, never numbered "x of y". */
     currentLevel,
     /** Null only when the user has no active enrollment. */
     ring,
